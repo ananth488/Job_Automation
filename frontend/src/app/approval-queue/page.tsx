@@ -433,11 +433,15 @@ export default function ApprovalQueuePage() {
   const handleDownloadTailoredPdf = async (appId: number, company: string) => {
     try {
       const token = localStorage.getItem('access_token');
-      toast.loading('Generating Tailored Resume PDF (Naukri Neo Style)...', { id: 'pdf-dl' });
-      const res = await fetch(`${API_BASE_URL}/applications/${appId}/tailored-pdf`, {
-        headers: { Authorization: `Bearer ${token || ''}` },
+      toast.loading('Generating Tailored Resume PDF...', { id: 'pdf-dl' });
+      const downloadUrl = `${API_BASE_URL}/applications/${appId}/tailored-pdf${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+      const res = await fetch(downloadUrl, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-      if (!res.ok) throw new Error('Failed to generate PDF');
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.detail || 'Failed to generate PDF');
+      }
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -448,8 +452,9 @@ export default function ApprovalQueuePage() {
       a.remove();
       window.URL.revokeObjectURL(url);
       toast.success('Tailored Resume PDF ready and downloaded!', { id: 'pdf-dl' });
-    } catch {
-      toast.error('Could not download tailored PDF', { id: 'pdf-dl' });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Could not download tailored PDF';
+      toast.error(msg, { id: 'pdf-dl' });
     }
   };
 
@@ -457,10 +462,14 @@ export default function ApprovalQueuePage() {
     try {
       const token = localStorage.getItem('access_token');
       toast.loading('Downloading Master Resume PDF...', { id: 'pdf-dl' });
-      const res = await fetch(`${API_BASE_URL}/resumes/${masterResumeId}/download`, {
-        headers: { Authorization: `Bearer ${token || ''}` },
+      const downloadUrl = `${API_BASE_URL}/resume/${masterResumeId}/download${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+      const res = await fetch(downloadUrl, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-      if (!res.ok) throw new Error('Failed to download master resume');
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.detail || 'Failed to download master resume');
+      }
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -471,8 +480,9 @@ export default function ApprovalQueuePage() {
       a.remove();
       window.URL.revokeObjectURL(url);
       toast.success('Original Master Resume downloaded!', { id: 'pdf-dl' });
-    } catch {
-      toast.error('Could not download master resume', { id: 'pdf-dl' });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Could not download master resume';
+      toast.error(msg, { id: 'pdf-dl' });
     }
   };
 

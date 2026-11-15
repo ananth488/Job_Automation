@@ -179,8 +179,19 @@ async def run_job_search_cycle(user_id: int = 1) -> dict[str, Any]:
                         now_time = datetime.now(timezone.utc)
 
                         matched_skills = match_result.matched_skills or profile.skills or []
-                        tailored_summary = tailor.generate_tailored_summary(profile, job_obj, matched_skills)
-                        cover_letter = tailor.generate_cover_letter(profile, job_obj, matched_skills)
+                        missing_skills = match_result.missing_skills or []
+                        tailored_summary = tailor.generate_tailored_summary(
+                            profile=profile,
+                            job=job_obj,
+                            matched_skills=matched_skills,
+                            missing_skills=missing_skills,
+                        )
+                        cover_letter = tailor.generate_cover_letter(
+                            profile=profile,
+                            job=job_obj,
+                            matched_skills=matched_skills,
+                            missing_skills=missing_skills,
+                        )
 
                         new_app = Application(
                             user_id=user_id,

@@ -364,26 +364,29 @@ def get_tailored_resume_pdf(
             )
         )
 
-    # In Tailored Neo Resume, bridge JD gap by combining matched skills + missing required skills
-    target_skills = []
-    if job.skills_required:
-        target_skills.extend(job.skills_required)
-    if match:
-        if match.matched_skills:
-            target_skills.extend(match.matched_skills)
-        if match.missing_skills:
-            target_skills.extend(match.missing_skills)
-    if profile and profile.skills:
-        target_skills.extend(profile.skills)
+    # In Tailored Neo Resume, bridge JD gap dynamically by combining matched skills + missing required skills
+    matched_skills = list(match.matched_skills) if match and match.matched_skills else []
+    missing_skills = list(match.missing_skills) if match and match.missing_skills else []
 
-    matched_skills = target_skills if target_skills else (match.matched_skills if match and match.matched_skills else (profile.skills or []))
+    candidate_skills = profile.skills or []
+    cand_lower = {s.lower() for s in candidate_skills}
+    if job.skills_required:
+        for js in job.skills_required:
+            if js.lower() not in cand_lower and js not in missing_skills:
+                missing_skills.append(js)
+            elif js.lower() in cand_lower and js not in matched_skills:
+                matched_skills.append(js)
 
     doc_resume = db.scalar(
         select(GeneratedDocument).where(
             (GeneratedDocument.application_id == app.id) & (GeneratedDocument.doc_type == "resume")
         )
     )
-    tailored_summary = doc_resume.content_text if doc_resume else tailor.generate_tailored_summary(profile, job, matched_skills)
+    tailored_summary = (
+        doc_resume.content_text
+        if (doc_resume and doc_resume.content_text and len(doc_resume.content_text) > 30)
+        else tailor.generate_tailored_summary(profile, job, matched_skills=matched_skills, missing_skills=missing_skills)
+    )
 
     original_resume = db.scalar(
         select(Resume).where(Resume.user_id == current_user.id).order_by(desc(Resume.created_at))
@@ -394,6 +397,7 @@ def get_tailored_resume_pdf(
         profile=profile,
         job=job,
         matched_skills=matched_skills,
+        missing_skills=missing_skills,
         tailored_summary=tailored_summary,
         original_resume=original_resume,
     )
@@ -472,20 +476,19 @@ def prepare_application_for_job(
     )
 
     # In Tailored Neo Resume, bridge JD gap by combining matched skills + missing required skills
-    target_skills = []
+    matched_skills = list(match.matched_skills) if match and match.matched_skills else []
+    missing_skills = list(match.missing_skills) if match and match.missing_skills else []
+    candidate_skills = profile.skills or []
+    cand_lower = {s.lower() for s in candidate_skills}
     if job.skills_required:
-        target_skills.extend(job.skills_required)
-    if match:
-        if match.matched_skills:
-            target_skills.extend(match.matched_skills)
-        if match.missing_skills:
-            target_skills.extend(match.missing_skills)
-    if profile and profile.skills:
-        target_skills.extend(profile.skills)
+        for js in job.skills_required:
+            if js.lower() not in cand_lower and js not in missing_skills:
+                missing_skills.append(js)
+            elif js.lower() in cand_lower and js not in matched_skills:
+                matched_skills.append(js)
 
-    matched_skills = target_skills if target_skills else (match.matched_skills if match and match.matched_skills else (profile.skills or []))
-    cover_letter = tailor.generate_cover_letter(profile, job, matched_skills)
-    tailored_summary = tailor.generate_tailored_summary(profile, job, matched_skills)
+    cover_letter = tailor.generate_cover_letter(profile, job, matched_skills=matched_skills, missing_skills=missing_skills)
+    tailored_summary = tailor.generate_tailored_summary(profile, job, matched_skills=matched_skills, missing_skills=missing_skills)
 
     app = Application(
         user_id=current_user.id,

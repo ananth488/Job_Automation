@@ -1,13 +1,15 @@
-"""ATS-Compliant Tailored Resume PDF Generator (Naukri Neo Style).
+"""ATS-Compliant Tailored Resume PDF Generator (Universal Engine).
 
-Universal Multi-User & Multi-Domain Engine:
-Preserves any candidate's authentic resume structure, experience, and projects dynamically,
-while optimizing the Professional Summary and Technical Skills specifically to bridge
-the target Job Description (JD) requirements with zero duplicates.
+Purely Dynamic Multi-User & Multi-Domain Engine:
+Preserves any candidate's authentic resume structure, experience, education,
+and certifications dynamically, while bridging the target Job Description (JD)
+by incorporating matched and missing required skills into the ATS-optimized resume.
+Zero hardcoded candidate names, companies, or technologies.
 """
 
 from __future__ import annotations
 
+import html
 import json
 from pathlib import Path
 import re
@@ -22,21 +24,36 @@ from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer,
 from app.models.models import CandidateProfile, Job, Resume
 
 
+def safe_xml(text: str | None) -> str:
+    """Safely escape text for ReportLab Paragraphs while preserving standard formatting."""
+    if not text:
+        return ""
+    # Convert special XML characters to valid entities
+    s = str(text)
+    # First unescape to avoid double-escaping if already escaped
+    s = html.unescape(s)
+    # Escape &, <, >
+    s = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    return s
+
+
 def extract_clean_bullets(desc: str) -> list[str]:
-    """Extract clean, complete bullet points from a description string without splitting on dots."""
+    """Extract clean bullet points from a description string without splitting on hyphens inside words."""
     if not desc:
         return []
     lines = []
-    # Split on newlines or bullet markers (▸, •, -)
-    for raw in re.split(r"[\n\r]+|[▸•]\s*", desc):
+    # Split on newlines, or explicit bullet characters (▸, •, *)
+    # Do NOT split on bare hyphen unless it is at the start of a line or after a newline
+    raw_chunks = re.split(r"[\n\r]+|(?:^|[\n\r\s]+)[▸•*]\s*|(?:^|[\n\r]+)\s*-\s*", desc)
+    for raw in raw_chunks:
         cleaned = raw.strip().lstrip("▸•-* ").strip()
-        if len(cleaned) > 10:
+        if len(cleaned) > 8:
             lines.append(cleaned)
     return lines[:4]
 
 
 class TailoredResumePdfGenerator:
-    """Generates an ATS-optimized, high-impact PDF resume tailored to any candidate and any Job Description."""
+    """Generates ATS-optimized, high-impact PDF resumes dynamically for any candidate and any JD."""
 
     def __init__(self, output_dir: str | Path | None = None):
         if output_dir:
@@ -45,23 +62,244 @@ class TailoredResumePdfGenerator:
             self.output_dir = Path(__file__).resolve().parent.parent.parent.parent / "uploads" / "tailored"
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
+    def _build_styles(self) -> dict[str, ParagraphStyle]:
+        """Create isolated ReportLab paragraph styles without style sheet pollution."""
+        styles = getSampleStyleSheet()
+
+        return {
+            "name": ParagraphStyle(
+                "DynamicCandidateName",
+                parent=styles["Normal"],
+                fontName="Helvetica-Bold",
+                fontSize=18,
+                leading=21,
+                textColor=colors.HexColor("#0F172A"),
+                alignment=TA_CENTER,
+            ),
+            "title_sub": ParagraphStyle(
+                "DynamicTitleSub",
+                parent=styles["Normal"],
+                fontName="Helvetica-Bold",
+                fontSize=9.5,
+                leading=12.5,
+                textColor=colors.HexColor("#334155"),
+                alignment=TA_CENTER,
+            ),
+            "contact": ParagraphStyle(
+                "DynamicContactInfo",
+                parent=styles["Normal"],
+                fontName="Helvetica",
+                fontSize=8.3,
+                leading=11.5,
+                textColor=colors.HexColor("#475569"),
+                alignment=TA_CENTER,
+            ),
+            "section_heading": ParagraphStyle(
+                "DynamicSectionHeading",
+                parent=styles["Normal"],
+                fontName="Helvetica-Bold",
+                fontSize=10,
+                leading=13,
+                textColor=colors.HexColor("#0F172A"),
+                spaceBefore=5,
+                spaceAfter=2,
+                leftIndent=0,
+                alignment=TA_LEFT,
+            ),
+            "body": ParagraphStyle(
+                "DynamicBodyText",
+                parent=styles["Normal"],
+                fontName="Helvetica",
+                fontSize=8.5,
+                leading=12,
+                textColor=colors.HexColor("#1E293B"),
+                leftIndent=0,
+                alignment=TA_LEFT,
+            ),
+            "skill": ParagraphStyle(
+                "DynamicSkillLine",
+                parent=styles["Normal"],
+                fontName="Helvetica",
+                fontSize=8.5,
+                leading=12,
+                textColor=colors.HexColor("#1E293B"),
+                leftIndent=0,
+                spaceAfter=1.5,
+                alignment=TA_LEFT,
+            ),
+            "job_title": ParagraphStyle(
+                "DynamicJobTitle",
+                parent=styles["Normal"],
+                fontName="Helvetica-Bold",
+                fontSize=9,
+                leading=12,
+                textColor=colors.HexColor("#0F172A"),
+                leftIndent=0,
+                alignment=TA_LEFT,
+            ),
+            "job_meta": ParagraphStyle(
+                "DynamicJobMeta",
+                parent=styles["Normal"],
+                fontName="Helvetica-Bold",
+                fontSize=8.2,
+                leading=11.5,
+                textColor=colors.HexColor("#475569"),
+                alignment=TA_RIGHT,
+            ),
+            "bullet": ParagraphStyle(
+                "DynamicBulletPoint",
+                parent=styles["Normal"],
+                fontName="Helvetica",
+                fontSize=8.4,
+                leading=11.8,
+                textColor=colors.HexColor("#334155"),
+                leftIndent=11,
+                firstLineIndent=-7,
+                spaceAfter=1.5,
+                alignment=TA_LEFT,
+            ),
+            "project_tech": ParagraphStyle(
+                "DynamicProjectTech",
+                parent=styles["Normal"],
+                fontName="Helvetica-Oblique",
+                fontSize=8.2,
+                leading=11,
+                textColor=colors.HexColor("#475569"),
+                leftIndent=0,
+                spaceAfter=1.5,
+                alignment=TA_LEFT,
+            ),
+        }
+
+    def _make_hr(self) -> HRFlowable:
+        return HRFlowable(
+            width="100%",
+            thickness=0.75,
+            color=colors.HexColor("#94A3B8"),
+            spaceBefore=1,
+            spaceAfter=3.5,
+            hAlign="LEFT",
+        )
+
+    def _group_skills_dynamically(self, skills: list[str]) -> list[tuple[str, list[str]]]:
+        """Organize any list of candidate/job skills into clean, domain-appropriate categories."""
+        if not skills:
+            return []
+
+        # Deduplicate while preserving order & casing
+        seen = set()
+        deduped = []
+        for s in skills:
+            if not s or not isinstance(s, str):
+                continue
+            clean = s.strip()
+            if len(clean) < 2:
+                continue
+            k = clean.lower()
+            if k not in seen:
+                seen.add(k)
+                deduped.append(clean)
+
+        # Detect domain flavor
+        combined_text = " ".join(deduped).lower()
+
+        # 1. Medical Coding / Healthcare
+        if any(w in combined_text for w in ("icd-10", "icd-9", "cpt", "hcpcs", "medical coding", "hipaa", "billing", "cpc", "ccs", "ehr", "emr", "epic", "cerner", "rcm")):
+            cat_coding = []
+            cat_clinical = []
+            cat_systems = []
+            cat_compliance = []
+
+            for s in deduped:
+                sl = s.lower()
+                if any(w in sl for w in ("icd", "cpt", "hcpcs", "drg", "coding", "classification")):
+                    cat_coding.append(s)
+                elif any(w in sl for w in ("epic", "cerner", "meditech", "ehr", "emr", "3m", "software", "tool")):
+                    cat_systems.append(s)
+                elif any(w in sl for w in ("hipaa", "compliance", "audit", "rcm", "billing", "revenue", "denial", "guideline")):
+                    cat_compliance.append(s)
+                else:
+                    cat_clinical.append(s)
+
+            results = []
+            if cat_coding:
+                results.append(("Coding Classifications & Nomenclature", cat_coding))
+            if cat_clinical:
+                results.append(("Clinical Knowledge & Specialties", cat_clinical))
+            if cat_systems:
+                results.append(("Healthcare Systems & EHR Platforms", cat_systems))
+            if cat_compliance:
+                results.append(("Compliance, RCM & Industry Standards", cat_compliance))
+            if results:
+                return results
+
+        # 2. Software / IT
+        if any(w in combined_text for w in ("python", "javascript", "react", "sql", "java", "html", "css", "docker", "aws", "git", "api")):
+            cat_languages = []
+            cat_frameworks = []
+            cat_data_cloud = []
+            cat_tools = []
+
+            for s in deduped:
+                sl = s.lower()
+                if any(w in sl for w in ("javascript", "typescript", "python", "java", "c++", "c#", "html", "css", "sql", "bash")):
+                    cat_languages.append(s)
+                elif any(w in sl for w in ("react", "next", "node", "express", "django", "fastapi", "spring", "vue", "angular", "redux")):
+                    cat_frameworks.append(s)
+                elif any(w in sl for w in ("postgres", "mysql", "mongodb", "aws", "azure", "gcp", "docker", "kubernetes", "cloud")):
+                    cat_data_cloud.append(s)
+                else:
+                    cat_tools.append(s)
+
+            results = []
+            if cat_languages:
+                results.append(("Languages & Core", cat_languages))
+            if cat_frameworks:
+                results.append(("Frameworks & Architecture", cat_frameworks))
+            if cat_data_cloud:
+                results.append(("Databases, Cloud & Infrastructure", cat_data_cloud))
+            if cat_tools:
+                results.append(("Tools, Practices & Methodologies", cat_tools))
+            if results:
+                return results
+
+        # 3. Universal / General Domain Grouping (Dynamic Chunking)
+        # Group evenly without inventing fake categories
+        if len(deduped) <= 8:
+            return [("Core Competencies & Domain Expertise", deduped)]
+        elif len(deduped) <= 16:
+            mid = (len(deduped) + 1) // 2
+            return [
+                ("Core Competencies & Methodologies", deduped[:mid]),
+                ("Technical Skills & Tools", deduped[mid:]),
+            ]
+        else:
+            third = (len(deduped) + 2) // 3
+            return [
+                ("Core Competencies & Domain Expertise", deduped[:third]),
+                ("Specialized Technical Skills", deduped[third : 2 * third]),
+                ("Tools, Software & Standards", deduped[2 * third :]),
+            ]
+
     def generate_pdf(
         self,
         profile: CandidateProfile,
         job: Job,
         matched_skills: list[str] | None = None,
+        missing_skills: list[str] | None = None,
         tailored_summary: str | None = None,
         output_filename: str | None = None,
         original_resume: Resume | None = None,
     ) -> Path:
-        """Generate and save the tailored resume PDF dynamically for any user and domain."""
+        """Generate and save the tailored resume PDF dynamically for ANY user and domain."""
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+
         if not output_filename:
-            sanitized_comp = "".join(c for c in job.company if c.isalnum() or c in ("-", "_")).lower()
+            sanitized_comp = "".join(c for c in (job.company or "job") if c.isalnum() or c in ("-", "_")).lower()
             output_filename = f"tailored_resume_u{profile.user_id}_j{job.id}_{sanitized_comp}.pdf"
 
         file_path = self.output_dir / output_filename
 
-        # Standard 0.5-inch margins for clean single-page ATS layout (Printable width = 540 pt)
         doc = SimpleDocTemplate(
             str(file_path),
             pagesize=letter,
@@ -71,464 +309,345 @@ class TailoredResumePdfGenerator:
             bottomMargin=32,
         )
 
-        styles = getSampleStyleSheet()
-
-        name_style = ParagraphStyle(
-            "CandidateName",
-            parent=styles["Normal"],
-            fontName="Helvetica-Bold",
-            fontSize=18,
-            leading=21,
-            textColor=colors.HexColor("#0F172A"),
-            alignment=TA_CENTER,
-        )
-
-        title_sub_style = ParagraphStyle(
-            "TitleSub",
-            parent=styles["Normal"],
-            fontName="Helvetica-Bold",
-            fontSize=9.5,
-            leading=12.5,
-            textColor=colors.HexColor("#334155"),
-            alignment=TA_CENTER,
-        )
-
-        contact_style = ParagraphStyle(
-            "ContactInfo",
-            parent=styles["Normal"],
-            fontName="Helvetica",
-            fontSize=8.3,
-            leading=11.5,
-            textColor=colors.HexColor("#475569"),
-            alignment=TA_CENTER,
-        )
-
-        section_heading = ParagraphStyle(
-            "SectionHeading",
-            parent=styles["Normal"],
-            fontName="Helvetica-Bold",
-            fontSize=10,
-            leading=13,
-            textColor=colors.HexColor("#0F172A"),
-            spaceBefore=5,
-            spaceAfter=2,
-            leftIndent=0,
-            alignment=TA_LEFT,
-        )
-
-        body_style = ParagraphStyle(
-            "BodyText",
-            parent=styles["Normal"],
-            fontName="Helvetica",
-            fontSize=8.5,
-            leading=12,
-            textColor=colors.HexColor("#1E293B"),
-            leftIndent=0,
-            alignment=TA_LEFT,
-        )
-
-        skill_style = ParagraphStyle(
-            "SkillLine",
-            parent=styles["Normal"],
-            fontName="Helvetica",
-            fontSize=8.5,
-            leading=12,
-            textColor=colors.HexColor("#1E293B"),
-            leftIndent=0,
-            spaceAfter=1.5,
-            alignment=TA_LEFT,
-        )
-
-        job_title_style = ParagraphStyle(
-            "JobTitle",
-            parent=styles["Normal"],
-            fontName="Helvetica-Bold",
-            fontSize=9,
-            leading=12,
-            textColor=colors.HexColor("#0F172A"),
-            leftIndent=0,
-            alignment=TA_LEFT,
-        )
-
-        job_meta_style = ParagraphStyle(
-            "JobMeta",
-            parent=styles["Normal"],
-            fontName="Helvetica-Bold",
-            fontSize=8.2,
-            leading=11.5,
-            textColor=colors.HexColor("#475569"),
-            alignment=TA_RIGHT,
-        )
-
-        bullet_style = ParagraphStyle(
-            "BulletPoint",
-            parent=styles["Normal"],
-            fontName="Helvetica",
-            fontSize=8.4,
-            leading=11.8,
-            textColor=colors.HexColor("#334155"),
-            leftIndent=11,
-            firstLineIndent=-7,
-            spaceAfter=1.5,
-            alignment=TA_LEFT,
-        )
-
-        project_tech_style = ParagraphStyle(
-            "ProjectTech",
-            parent=styles["Normal"],
-            fontName="Helvetica-Oblique",
-            fontSize=8.2,
-            leading=11,
-            textColor=colors.HexColor("#475569"),
-            leftIndent=0,
-            spaceAfter=1.5,
-            alignment=TA_LEFT,
-        )
-
-        def make_hr():
-            return HRFlowable(
-                width="100%",
-                thickness=0.75,
-                color=colors.HexColor("#94A3B8"),
-                spaceBefore=1,
-                spaceAfter=3.5,
-                hAlign="LEFT",
-            )
-
+        styles = self._build_styles()
         elements = []
 
-        # 1. Header: Candidate Name, Title, and Contact Info
-        full_name = profile.full_name or "ANANTH P"
-        elements.append(Paragraph(full_name.upper(), name_style))
+        # 1. Candidate Name (100% Dynamic from profile)
+        full_name = profile.full_name or (profile.email.split("@")[0].replace(".", " ").title() if profile.email else "Candidate")
+        elements.append(Paragraph(safe_xml(full_name).upper(), styles["name"]))
         elements.append(Spacer(1, 1.5))
 
-        # Dynamic Subtitle: Candidate's role adapted to target domain
+        # Dynamic Subtitle: Adapt to target domain and candidate's experience
         candidate_primary_title = None
         if profile.experience and isinstance(profile.experience, list) and len(profile.experience) > 0:
             candidate_primary_title = profile.experience[0].get("title")
+        if not candidate_primary_title and original_resume and original_resume.parsed_data:
+            orig_exp = original_resume.parsed_data.get("experience")
+            if orig_exp and isinstance(orig_exp, list) and len(orig_exp) > 0:
+                candidate_primary_title = orig_exp[0].get("title")
         if not candidate_primary_title:
-            candidate_primary_title = job.title if job and job.title else "Software Professional"
+            candidate_primary_title = job.title or "Professional"
 
-        elements.append(Paragraph(candidate_primary_title, title_sub_style))
+        elements.append(Paragraph(safe_xml(candidate_primary_title), styles["title_sub"]))
         elements.append(Spacer(1, 2))
 
-        # Dynamic Contact Line
+        # Dynamic Contact Line (Only include actual data; no hardcoded defaults)
         contact_parts = []
         if profile.location:
-            contact_parts.append(profile.location)
+            contact_parts.append(profile.location.strip())
         if profile.email:
-            contact_parts.append(profile.email)
+            contact_parts.append(profile.email.strip())
         if profile.phone:
-            contact_parts.append(profile.phone)
-        contact_line_1 = " &nbsp;|&nbsp; ".join(contact_parts) if contact_parts else "Chennai, India | ananthslvm28@gmail.com"
+            contact_parts.append(profile.phone.strip())
 
-        links = ["LinkedIn", "GitHub", "Portfolio"]
-        contact_line_2 = " &nbsp;|&nbsp; ".join(links)
+        if contact_parts:
+            contact_line_1 = " &nbsp;|&nbsp; ".join([safe_xml(cp) for cp in contact_parts])
+            elements.append(Paragraph(contact_line_1, styles["contact"]))
+            elements.append(Spacer(1, 1))
 
-        elements.append(Paragraph(contact_line_1, contact_style))
-        elements.append(Spacer(1, 1))
-        elements.append(Paragraph(contact_line_2, contact_style))
+        # Optional Profile Links (Only if present)
+        links = []
+        if profile.linkedin_url:
+            links.append(f"<a href='{safe_xml(profile.linkedin_url)}'>LinkedIn</a>")
+        if profile.github_url:
+            links.append(f"<a href='{safe_xml(profile.github_url)}'>GitHub</a>")
+        if profile.portfolio_url:
+            links.append(f"<a href='{safe_xml(profile.portfolio_url)}'>Portfolio</a>")
+
+        if links:
+            elements.append(Paragraph(" &nbsp;|&nbsp; ".join(links), styles["contact"]))
+            elements.append(Spacer(1, 3))
+        else:
+            elements.append(Spacer(1, 2))
+
+        # 2. Professional Summary (Dynamic for candidate domain & target job)
+        elements.append(Paragraph("PROFESSIONAL SUMMARY", styles["section_heading"]))
+        elements.append(self._make_hr())
+
+        from app.services.tailoring.tailoring import ResumeTailor
+        tailor = ResumeTailor()
+
+        if not tailored_summary:
+            tailored_summary = tailor.generate_tailored_summary(
+                profile=profile,
+                job=job,
+                matched_skills=matched_skills,
+                missing_skills=missing_skills,
+            )
+
+        elements.append(Paragraph(safe_xml(tailored_summary), styles["body"]))
         elements.append(Spacer(1, 4))
 
-        # Skill Normalization & Universal Multi-Domain Categorization
-        def normalize_skill(s: str) -> str:
-            sl = s.strip().lower()
-            mapping = {
-                "react": "React.js", "react.js": "React.js", "reactjs": "React.js",
-                "next": "Next.js", "next.js": "Next.js", "nextjs": "Next.js",
-                "node": "Node.js", "node.js": "Node.js", "nodejs": "Node.js",
-                "express": "Express.js", "express.js": "Express.js", "expressjs": "Express.js",
-                "react native": "React Native", "react-native": "React Native",
-                "javascript": "JavaScript (ES6+)", "js": "JavaScript (ES6+)", "es6": "JavaScript (ES6+)",
-                "typescript": "TypeScript", "ts": "TypeScript",
-                "html": "HTML5", "html5": "HTML5",
-                "css": "CSS3", "css3": "CSS3",
-                "python": "Python", "django": "Django", "fastapi": "FastAPI", "flask": "Flask",
-                "java": "Java", "spring": "Spring Boot", "spring boot": "Spring Boot",
-                "rest api": "RESTful APIs", "restful api": "RESTful APIs", "rest apis": "RESTful APIs", "restful apis": "RESTful APIs", "rest": "RESTful APIs",
-                "redux": "Redux", "redux toolkit": "Redux", "context api": "Context API",
-                "tailwind": "Tailwind CSS", "tailwind css": "Tailwind CSS", "tailwindcss": "Tailwind CSS",
-                "bootstrap": "Bootstrap", "bootstrap 5": "Bootstrap",
-                "git": "Git", "github": "GitHub", "graphql": "GraphQL",
-                "websockets": "WebSockets", "websocket": "WebSockets", "socket.io": "Socket.io", "socketio": "Socket.io",
-                "docker": "Docker", "kubernetes": "Kubernetes", "k8s": "Kubernetes",
-                "aws": "AWS", "azure": "Azure", "gcp": "GCP",
-                "postgresql": "PostgreSQL", "postgres": "PostgreSQL", "mysql": "MySQL", "mongodb": "MongoDB", "sql": "SQL",
-                "pytorch": "PyTorch", "tensorflow": "TensorFlow", "pandas": "Pandas", "numpy": "NumPy",
-                "jest": "Jest", "cypress": "Cypress", "selenium": "Selenium",
-            }
-            return mapping.get(sl, s.strip())
-
-        # Determine categories dynamically based on the candidate's domain and target JD
-        all_skills_combined = []
-        if matched_skills:
-            all_skills_combined.extend(matched_skills)
+        # 3. Dynamic Technical & Domain Skills (ATS Bridging: Candidate Skills + Target Missing Skills)
+        all_tailored_skills = []
+        # Candidate's authentic skills
         if profile.skills:
-            all_skills_combined.extend(profile.skills)
+            all_tailored_skills.extend(profile.skills)
+        elif original_resume and original_resume.parsed_data and original_resume.parsed_data.get("skills"):
+            all_tailored_skills.extend(original_resume.parsed_data.get("skills"))
 
-        # Dynamic Categories
-        categories = [
-            ("Languages & Web", ["JavaScript (ES6+)", "TypeScript", "HTML5", "CSS3"]),
-            ("Frontend Frameworks & State", ["React.js", "Next.js", "React Hooks", "Redux", "Context API", "React Native"]),
-            ("UI Libraries & Styling", ["Tailwind CSS", "Bootstrap", "Ant Design", "Responsive Design"]),
-            ("Backend & APIs", ["Node.js", "RESTful APIs", "GraphQL", "WebSockets", "Socket.io"]),
-            ("Tools & Practices", ["Git", "GitHub", "Web & Mobile Testing", "SEO Optimization", "Performance Optimization"]),
-        ]
+        # Job required skills & matched skills
+        if matched_skills:
+            all_tailored_skills.extend(matched_skills)
+        if missing_skills:
+            all_tailored_skills.extend(missing_skills)
+        if job.skills_required:
+            all_tailored_skills.extend(job.skills_required)
 
-        # If candidate or job is in another domain (e.g. Python, Java, Data Science, DevOps), adjust categories
-        domain_text = " ".join(all_skills_combined).lower() + " " + (job.title or "").lower()
-        if any(w in domain_text for w in ("data science", "machine learning", "pytorch", "pandas", "tensorflow")):
-            categories = [
-                ("Programming & Analysis", ["Python", "SQL", "R"]),
-                ("Machine Learning & Frameworks", ["PyTorch", "TensorFlow", "Scikit-Learn", "Pandas", "NumPy"]),
-                ("Data & Cloud Platforms", ["PostgreSQL", "AWS", "BigQuery", "Snowflake"]),
-                ("APIs & Deployment", ["RESTful APIs", "FastAPI", "Docker", "Git"]),
-                ("Tools & Practices", ["Jupyter", "MLOps", "Model Evaluation", "A/B Testing"]),
-            ]
-        elif any(w in domain_text for w in ("devops", "cloud engineer", "sre", "kubernetes", "terraform")):
-            categories = [
-                ("Cloud & Infrastructure", ["AWS", "Azure", "GCP", "Terraform"]),
-                ("Containers & Orchestration", ["Docker", "Kubernetes", "Helm"]),
-                ("CI/CD & Automation", ["Jenkins", "GitHub Actions", "GitLab CI", "Ansible"]),
-                ("Scripting & Systems", ["Python", "Bash", "Linux", "Shell Scripting"]),
-                ("Monitoring & Practices", ["Prometheus", "Grafana", "Git", "Security Best Practices"]),
-            ]
-        elif any(w in domain_text for w in ("java", "spring boot", "backend engineer")):
-            categories = [
-                ("Languages & Core", ["Java", "SQL", "Python"]),
-                ("Backend & Microservices", ["Spring Boot", "Spring MVC", "Hibernate", "RESTful APIs"]),
-                ("Databases & Messaging", ["PostgreSQL", "MySQL", "Kafka", "Redis"]),
-                ("Cloud & Containers", ["Docker", "Kubernetes", "AWS"]),
-                ("Tools & Practices", ["Git", "Maven", "JUnit", "CI/CD", "Agile"]),
-            ]
+        grouped_skills = self._group_skills_dynamically(all_tailored_skills)
+        if grouped_skills:
+            elements.append(Paragraph("SKILLS &amp; EXPERTISE", styles["section_heading"]))
+            elements.append(self._make_hr())
+            for cat_title, skill_list in grouped_skills:
+                skills_str = ", ".join(skill_list)
+                elements.append(
+                    Paragraph(f"<b>{safe_xml(cat_title)}:</b> {safe_xml(skills_str)}", styles["skill"])
+                )
+            elements.append(Spacer(1, 4))
 
-        seen_skills = set()
-        category_map = {cat: [] for cat, _ in categories}
+        # 4. Professional Experience (Authentic candidate experience; NO fake companies)
+        experiences = None
+        if profile.experience and isinstance(profile.experience, list) and len(profile.experience) > 0:
+            experiences = profile.experience
+        elif original_resume and original_resume.parsed_data and original_resume.parsed_data.get("experience"):
+            experiences = original_resume.parsed_data.get("experience")
 
-        # First pass: map target JD skills & matched skills
-        for s in all_skills_combined:
-            normed = normalize_skill(s)
-            k = normed.lower()
-            if k not in seen_skills:
-                seen_skills.add(k)
-                sl = normed.lower()
-                placed = False
-                for cat_name, _ in categories:
-                    c_lower = cat_name.lower()
-                    if ("language" in c_lower or "programming" in c_lower) and any(w in sl for w in ("javascript", "typescript", "python", "java", "html", "css", "sql", "bash", "es6")):
-                        category_map[cat_name].append(normed)
-                        placed = True
-                        break
-                    elif ("frontend" in c_lower or "machine learning" in c_lower or "microservice" in c_lower or "framework" in c_lower) and any(w in sl for w in ("react", "next", "vue", "angular", "redux", "pytorch", "tensorflow", "pandas", "numpy", "spring", "django", "fastapi")):
-                        category_map[cat_name].append(normed)
-                        placed = True
-                        break
-                    elif ("ui" in c_lower or "styling" in c_lower) and any(w in sl for w in ("tailwind", "bootstrap", "ant", "responsive", "ui", "style", "sass", "material")):
-                        category_map[cat_name].append(normed)
-                        placed = True
-                        break
-                    elif ("backend" in c_lower or "api" in c_lower or "database" in c_lower or "cloud" in c_lower or "container" in c_lower) and any(w in sl for w in ("node", "express", "backend", "mongo", "database", "postgres", "redis", "kafka", "rest", "api", "graphql", "socket", "aws", "docker", "kubernetes")):
-                        category_map[cat_name].append(normed)
-                        placed = True
-                        break
-                    elif ("tool" in c_lower or "practice" in c_lower or "ci/cd" in c_lower or "monitor" in c_lower) and any(w in sl for w in ("git", "test", "jest", "cypress", "seo", "ci/cd", "webpack", "vite", "performance", "jenkins", "prometheus")):
-                        category_map[cat_name].append(normed)
-                        placed = True
-                        break
-                if not placed:
-                    # Place in last category
-                    last_cat = list(category_map.keys())[-1]
-                    category_map[last_cat].append(normed)
+        if experiences:
+            elements.append(Paragraph("PROFESSIONAL EXPERIENCE", styles["section_heading"]))
+            elements.append(self._make_hr())
 
-        # Fill remaining defaults with zero duplicates
-        for cat, defaults in categories:
-            for d in defaults:
-                dk = d.lower()
-                if dk not in seen_skills:
-                    seen_skills.add(dk)
-                    category_map[cat].append(d)
+            for exp in experiences:
+                exp_title = exp.get("title") or "Professional"
+                exp_company = exp.get("company") or exp.get("organization") or ""
+                exp_location = exp.get("location") or profile.location or ""
+                exp_dates = exp.get("dates") or f"{exp.get('start', '')} – {exp.get('end', '')}".strip(" –")
 
-        # 2. Professional Summary (Clean single paragraph, tailored to candidate's domain & job)
-        elements.append(Paragraph("PROFESSIONAL SUMMARY", section_heading))
-        elements.append(make_hr())
+                title_comp = f"<b>{safe_xml(exp_title)}</b>"
+                if exp_company:
+                    title_comp += f" &mdash; <i>{safe_xml(exp_company)}</i>"
 
-        has_node = "node.js" in seen_skills
-        exp_years = f"{profile.total_experience_years or 2.5} years"
-        target_role = job.title if job and job.title else candidate_primary_title
+                date_loc_parts = [safe_xml(p) for p in [exp_dates, exp_location] if p]
+                date_loc_str = " | ".join(date_loc_parts)
 
-        # Select top skills for summary dynamically
-        top_skills_for_summary = [s for s in ("React.js", "Next.js", "Node.js", "JavaScript (ES6+)", "TypeScript", "Redux", "Tailwind CSS") if s.lower() in seen_skills]
-        if not top_skills_for_summary:
-            top_skills_for_summary = list(seen_skills)[:5]
-        core_tech = ", ".join(top_skills_for_summary) if top_skills_for_summary else "modern software engineering practices"
+                header_table = Table(
+                    [[
+                        Paragraph(title_comp, styles["job_title"]),
+                        Paragraph(date_loc_str, styles["job_meta"]),
+                    ]],
+                    colWidths=[370, 170],
+                    hAlign="LEFT",
+                )
+                header_table.setStyle(
+                    TableStyle([
+                        ("PADDING", (0, 0), (-1, -1), 0),
+                        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ])
+                )
+                elements.append(header_table)
+                elements.append(Spacer(1, 1.5))
 
-        summary_text = (
-            f"{target_role} with {exp_years} of professional experience building responsive, high-performance applications using "
-            f"{core_tech}. Skilled in clean component architecture, scalable state management, "
-            f"seamless API integrations, real-time communications, performance optimization, and robust testing "
-            f"to deliver user-focused digital solutions and accelerate feature delivery."
-        )
-        elements.append(Paragraph(summary_text, body_style))
-        elements.append(Spacer(1, 4))
+                bullets = exp.get("bullets")
+                if not bullets and exp.get("description"):
+                    bullets = extract_clean_bullets(exp.get("description"))
 
-        # 3. Technical Skills (Deduplicated, zero company branding)
-        elements.append(Paragraph("TECHNICAL SKILLS", section_heading))
-        elements.append(make_hr())
+                if bullets and isinstance(bullets, list):
+                    for b in bullets[:4]:
+                        elements.append(Paragraph(f"• {safe_xml(b)}", styles["bullet"]))
+                elif exp.get("description"):
+                    elements.append(Paragraph(safe_xml(exp.get("description")), styles["body"]))
 
-        for cat, s_list in category_map.items():
-            if s_list:
-                elements.append(Paragraph(f"<b>{cat}:</b> {', '.join(s_list)}", skill_style))
+                elements.append(Spacer(1, 2.5))
 
-        elements.append(Spacer(1, 4))
+        # 5. Key Projects (Authentic candidate projects; omitted if none)
+        projects = None
+        if profile.projects and isinstance(profile.projects, list) and len(profile.projects) > 0:
+            projects = profile.projects
+        elif original_resume and original_resume.parsed_data and original_resume.parsed_data.get("projects"):
+            projects = original_resume.parsed_data.get("projects")
 
-        # 4. Professional Experience (Dynamic for any candidate)
-        elements.append(Paragraph("PROFESSIONAL EXPERIENCE", section_heading))
-        elements.append(make_hr())
+        if projects:
+            elements.append(Paragraph("KEY PROJECTS", styles["section_heading"]))
+            elements.append(self._make_hr())
 
-        default_experiences = [
-            {
-                "title": "Front End Developer",
-                "company": "LegalOptix Private Limited",
-                "location": "Chennai",
-                "dates": "Feb 2026 – Sep 2026",
-                "bullets": [
-                    "Build responsive frontend features with React.js, Next.js, JavaScript, Redux, and Tailwind CSS for application workflows.",
-                    "Use React Hooks and Context API to manage component and shared application state across modules.",
-                ],
-            },
-            {
-                "title": "Front End Developer",
-                "company": "Piccosoft Software Labs Private Limited",
-                "location": "Chennai",
-                "dates": "Dec 2023 – Nov 2025",
-                "bullets": [
-                    "Developed responsive web application features using React.js, Next.js, JavaScript, Redux, Tailwind CSS, React Hooks, and Context API.",
-                    "Integrated RESTful APIs to connect frontend modules with backend services and support dynamic data updates.",
-                    "Optimized semantic HTML, page-load performance, and metadata for SEO.",
-                    "Worked with UI/UX designers, backend developers, QA engineers, and product managers to clarify requirements and deliver features on schedule.",
-                ],
-            },
-        ]
+            for p in projects[:3]:
+                p_name = p.get("name") or "Project"
+                p_tech = p.get("tech") or p.get("technologies") or ""
+                elements.append(Paragraph(f"<b>{safe_xml(p_name)}</b>", styles["job_title"]))
+                if p_tech:
+                    elements.append(Paragraph(f"Technologies / Tools: {safe_xml(p_tech)}", styles["project_tech"]))
 
-        experiences = (
-            profile.experience
-            if (profile.experience and isinstance(profile.experience, list) and len(profile.experience) > 0)
-            else default_experiences
-        )
+                p_bullets = p.get("bullets")
+                if not p_bullets and p.get("description"):
+                    p_bullets = extract_clean_bullets(p.get("description"))
 
-        for exp in experiences:
-            exp_title = exp.get("title", "Software Engineer")
-            exp_company = exp.get("company", "Company")
-            exp_location = exp.get("location", profile.location or "India")
-            exp_dates = exp.get("dates") or f"{exp.get('start', '')} – {exp.get('end', '')}".strip(" –")
-            if not exp_dates:
-                exp_dates = "2024 – Present"
+                if p_bullets and isinstance(p_bullets, list):
+                    for b in p_bullets[:3]:
+                        elements.append(Paragraph(f"• {safe_xml(b)}", styles["bullet"]))
+                elif p.get("description"):
+                    elements.append(Paragraph(safe_xml(p.get("description")), styles["body"]))
 
-            header_table = Table(
-                [[
-                    Paragraph(f"<b>{exp_title}</b> &mdash; <i>{exp_company}</i>", job_title_style),
-                    Paragraph(f"{exp_dates} | {exp_location}", job_meta_style),
-                ]],
-                colWidths=[380, 160],
-                hAlign="LEFT",
-            )
-            header_table.setStyle(
-                TableStyle([
-                    ("PADDING", (0, 0), (-1, -1), 0),
-                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ])
-            )
-            elements.append(header_table)
-            elements.append(Spacer(1, 1.5))
+                elements.append(Spacer(1, 2.5))
 
-            bullets = exp.get("bullets")
-            if not bullets and exp.get("description"):
-                bullets = extract_clean_bullets(exp.get("description"))
-            if not bullets:
-                bullets = ["Contributed to core development workflows, feature delivery, and software optimization."]
+        # 6. Certifications & Licenses (Essential for Healthcare, Medical Coding, Engineering)
+        certs = None
+        if profile.certifications and isinstance(profile.certifications, list) and len(profile.certifications) > 0:
+            certs = profile.certifications
+        elif original_resume and original_resume.parsed_data and original_resume.parsed_data.get("certifications"):
+            certs = original_resume.parsed_data.get("certifications")
 
-            for b in bullets[:4]:
-                elements.append(Paragraph(f"• {b}", bullet_style))
-            elements.append(Spacer(1, 2.5))
+        if certs:
+            elements.append(Paragraph("CERTIFICATIONS &amp; CREDENTIALS", styles["section_heading"]))
+            elements.append(self._make_hr())
+            for c in certs:
+                elements.append(Paragraph(f"• {safe_xml(str(c))}", styles["bullet"]))
+            elements.append(Spacer(1, 3))
 
-        # 5. Key Projects (Dynamic for any candidate)
-        elements.append(Paragraph("KEY PROJECTS", section_heading))
-        elements.append(make_hr())
+        # 7. Education (Authentic candidate education)
+        education_items = None
+        if profile.education and isinstance(profile.education, list) and len(profile.education) > 0:
+            education_items = profile.education
+        elif original_resume and original_resume.parsed_data and original_resume.parsed_data.get("education"):
+            education_items = original_resume.parsed_data.get("education")
 
-        ecom_tech = "React.js, Next.js, Node.js, JavaScript, Redux, Context API, WebSockets" if has_node else "React.js, Next.js, JavaScript, Redux, Context API, WebSockets"
-        default_projects = [
-            {
-                "name": "E-Commerce Web Application",
-                "tech": ecom_tech,
-                "bullets": [
-                    "Implemented Wishlist, Cart, Checkout, and Order Management workflows covering returns, refunds, and cancellations.",
-                    "Developed Product Comparison, Saved Searches, Offer and Discount Management, and configurable widgets.",
-                    "Built buyer registration and login workflows with form validation and API integration.",
-                    "Integrated real-time notifications with WebSockets/Socket.io and applied lazy loading and dynamic rendering to support frontend performance.",
-                ],
-            },
-            {
-                "name": "Media Platform for Startup Founders",
-                "tech": "Next.js, GraphQL",
-                "bullets": [
-                    "Built a content-publishing platform with Next.js, GraphQL API integration, and dynamic page rendering.",
-                    "Applied SEO optimization techniques associated with a reported 25% increase in website traffic.",
-                ],
-            },
-            {
-                "name": "Property Loan Management",
-                "tech": "React.js, Next.js, Ant Design, Redux",
-                "bullets": [
-                    "Built responsive frontend components for an OCR-enabled document-processing application that extracts structured data from unstructured documents.",
-                    "Integrated external document-parsing APIs and refined UI components for a responsive user experience.",
-                ],
-            },
-        ]
+        if education_items:
+            elements.append(Paragraph("EDUCATION", styles["section_heading"]))
+            elements.append(self._make_hr())
 
-        projects = (
-            profile.projects
-            if (profile.projects and isinstance(profile.projects, list) and len(profile.projects) > 0)
-            else default_projects
+            for edu in education_items:
+                deg = edu.get("degree") or "Degree"
+                inst = edu.get("institution") or edu.get("university") or ""
+                yr = edu.get("year") or edu.get("dates") or ""
+                parts = [p for p in [f"<b>{safe_xml(deg)}</b>", safe_xml(inst), safe_xml(yr)] if p and p != "<b></b>"]
+                elements.append(Paragraph(" &nbsp;|&nbsp; ".join(parts), styles["body"]))
+
+        # Build document
+        doc.build(elements)
+        return file_path
+
+    def generate_master_resume_pdf(
+        self,
+        profile: CandidateProfile,
+        resume: Resume | None = None,
+        output_filename: str | None = None,
+    ) -> Path:
+        """Generate a clean ATS Master Resume PDF from candidate profile/parsed facts when original file is missing."""
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        if not output_filename:
+            user_clean = re.sub(r"[^a-zA-Z0-9]", "_", profile.full_name or "Resume").strip("_")
+            output_filename = f"Master_Resume_{user_clean}_u{profile.user_id}.pdf"
+
+        file_path = self.output_dir / output_filename
+
+        doc = SimpleDocTemplate(
+            str(file_path),
+            pagesize=letter,
+            leftMargin=36,
+            rightMargin=36,
+            topMargin=32,
+            bottomMargin=32,
         )
 
-        for p in projects[:3]:
-            p_name = p.get("name", "Software Project")
-            p_tech = p.get("tech") or p.get("technologies") or "Modern Tech Stack"
-            elements.append(Paragraph(f"<b>{p_name}</b>", job_title_style))
-            elements.append(Paragraph(f"Technologies: {p_tech}", project_tech_style))
+        styles = self._build_styles()
+        elements = []
 
-            p_bullets = p.get("bullets")
-            if not p_bullets and p.get("description"):
-                p_bullets = extract_clean_bullets(p.get("description"))
-            if not p_bullets:
-                p_bullets = ["Architected and delivered core platform workflows with responsive architecture and optimized rendering."]
+        # Name
+        full_name = profile.full_name or (profile.email.split("@")[0].replace(".", " ").title() if profile.email else "Candidate")
+        elements.append(Paragraph(safe_xml(full_name).upper(), styles["name"]))
+        elements.append(Spacer(1, 1.5))
 
-            for b in p_bullets[:4]:
-                elements.append(Paragraph(f"• {b}", bullet_style))
-            elements.append(Spacer(1, 2.5))
+        # Title
+        primary_title = "Professional"
+        if profile.experience and isinstance(profile.experience, list) and len(profile.experience) > 0:
+            primary_title = profile.experience[0].get("title", primary_title)
+        elements.append(Paragraph(safe_xml(primary_title), styles["title_sub"]))
+        elements.append(Spacer(1, 2))
 
-        # 6. Education (Dynamic for any candidate)
-        elements.append(Paragraph("EDUCATION", section_heading))
-        elements.append(make_hr())
+        # Contact
+        contact_parts = []
+        if profile.location:
+            contact_parts.append(profile.location.strip())
+        if profile.email:
+            contact_parts.append(profile.email.strip())
+        if profile.phone:
+            contact_parts.append(profile.phone.strip())
 
-        default_education = [
-            {"degree": "B.E., Computer Science and Engineering", "institution": "Anand Institute of Higher Technology", "year": "2016–2020"}
-        ]
-        education_items = (
-            profile.education
-            if (profile.education and isinstance(profile.education, list) and len(profile.education) > 0)
-            else default_education
-        )
+        if contact_parts:
+            elements.append(Paragraph(" &nbsp;|&nbsp; ".join([safe_xml(cp) for cp in contact_parts]), styles["contact"]))
+            elements.append(Spacer(1, 2))
 
-        for edu in education_items:
-            deg = edu.get("degree", "Bachelor of Engineering")
-            inst = edu.get("institution", "Institution")
-            yr = edu.get("year", "2016–2020")
-            elements.append(Paragraph(f"<b>{deg}</b> &nbsp;|&nbsp; {inst} &nbsp;|&nbsp; {yr}", body_style))
+        # Summary
+        summary = profile.summary or (resume.parsed_data.get("summary") if resume and resume.parsed_data else None)
+        if summary:
+            elements.append(Paragraph("PROFESSIONAL SUMMARY", styles["section_heading"]))
+            elements.append(self._make_hr())
+            elements.append(Paragraph(safe_xml(summary), styles["body"]))
+            elements.append(Spacer(1, 4))
 
-        # Build PDF cleanly
+        # Skills
+        skills = profile.skills or (resume.parsed_data.get("skills") if resume and resume.parsed_data else None)
+        if skills:
+            grouped = self._group_skills_dynamically(skills)
+            if grouped:
+                elements.append(Paragraph("SKILLS &amp; EXPERTISE", styles["section_heading"]))
+                elements.append(self._make_hr())
+                for cat_title, skill_list in grouped:
+                    elements.append(Paragraph(f"<b>{safe_xml(cat_title)}:</b> {safe_xml(', '.join(skill_list))}", styles["skill"]))
+                elements.append(Spacer(1, 4))
+
+        # Experience
+        experiences = profile.experience or (resume.parsed_data.get("experience") if resume and resume.parsed_data else None)
+        if experiences:
+            elements.append(Paragraph("PROFESSIONAL EXPERIENCE", styles["section_heading"]))
+            elements.append(self._make_hr())
+            for exp in experiences:
+                exp_title = exp.get("title") or "Professional"
+                exp_company = exp.get("company") or ""
+                exp_location = exp.get("location") or ""
+                exp_dates = exp.get("dates") or f"{exp.get('start', '')} – {exp.get('end', '')}".strip(" –")
+
+                title_comp = f"<b>{safe_xml(exp_title)}</b>"
+                if exp_company:
+                    title_comp += f" &mdash; <i>{safe_xml(exp_company)}</i>"
+                date_loc = " | ".join([safe_xml(p) for p in [exp_dates, exp_location] if p])
+
+                header_table = Table(
+                    [[Paragraph(title_comp, styles["job_title"]), Paragraph(date_loc, styles["job_meta"])]],
+                    colWidths=[370, 170],
+                    hAlign="LEFT",
+                )
+                header_table.setStyle(
+                    TableStyle([
+                        ("PADDING", (0, 0), (-1, -1), 0),
+                        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ])
+                )
+                elements.append(header_table)
+                elements.append(Spacer(1, 1.5))
+
+                bullets = exp.get("bullets") or (extract_clean_bullets(exp.get("description")) if exp.get("description") else None)
+                if bullets and isinstance(bullets, list):
+                    for b in bullets[:4]:
+                        elements.append(Paragraph(f"• {safe_xml(b)}", styles["bullet"]))
+                elif exp.get("description"):
+                    elements.append(Paragraph(safe_xml(exp.get("description")), styles["body"]))
+                elements.append(Spacer(1, 2.5))
+
+        # Education
+        education = profile.education or (resume.parsed_data.get("education") if resume and resume.parsed_data else None)
+        if education:
+            elements.append(Paragraph("EDUCATION", styles["section_heading"]))
+            elements.append(self._make_hr())
+            for edu in education:
+                deg = edu.get("degree") or "Degree"
+                inst = edu.get("institution") or ""
+                yr = edu.get("year") or ""
+                parts = [p for p in [f"<b>{safe_xml(deg)}</b>", safe_xml(inst), safe_xml(yr)] if p and p != "<b></b>"]
+                elements.append(Paragraph(" &nbsp;|&nbsp; ".join(parts), styles["body"]))
+
         doc.build(elements)
         return file_path
 

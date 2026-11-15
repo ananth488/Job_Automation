@@ -1,6 +1,6 @@
 """FastAPI dependencies for authentication and database access."""
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Query, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
@@ -8,19 +8,24 @@ from app.core.database import get_db
 from app.core.security import decode_token
 from app.models.models import User
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
 
 
 def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    token_header: str | None = Depends(oauth2_scheme),
+    token_query: str | None = Query(None, alias="token"),
     db: Session = Depends(get_db),
 ) -> User:
-    """Dependency: extract and validate the current user from the JWT token."""
+    """Dependency: extract and validate the current user from JWT in Authorization header or query param."""
+    token = token_header or token_query
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    if not token:
+        raise credentials_exception
+
     payload = decode_token(token)
     if payload is None:
         raise credentials_exception

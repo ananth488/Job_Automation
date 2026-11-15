@@ -209,6 +209,35 @@ export default function ProfilePage() {
     });
   };
 
+  const handleDownloadActiveResume = async () => {
+    if (!latestResume?.id) return;
+    try {
+      const token = localStorage.getItem('access_token');
+      toast.loading('Downloading active resume...', { id: 'resume-dl' });
+      const downloadUrl = `${API_BASE_URL}/resume/${latestResume.id}/download${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+      const res = await fetch(downloadUrl, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.detail || 'Failed to download resume');
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = latestResume.filename || 'Master_Resume.pdf';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success('Resume downloaded successfully!', { id: 'resume-dl' });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Could not download resume';
+      toast.error(msg, { id: 'resume-dl' });
+    }
+  };
+
   const handleSave = async () => {
     const errors: { [key: string]: string } = {};
     if (!profile.full_name?.trim()) {
@@ -452,7 +481,7 @@ export default function ProfilePage() {
                       size="sm"
                       onClick={(e) => {
                         e.stopPropagation();
-                        window.open(`${API_BASE_URL}/resume/${latestResume.id}/download`, '_blank');
+                        handleDownloadActiveResume();
                       }}
                       className="cursor-pointer text-xs bg-white hover:bg-slate-50"
                       title="Download active resume"

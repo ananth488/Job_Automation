@@ -151,17 +151,57 @@ def download_resume(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Download the uploaded resume file."""
+    """Download the uploaded resume file with cloud-resilient auto-generation."""
     resume = db.scalar(
         select(Resume).where((Resume.id == resume_id) & (Resume.user_id == current_user.id))
     )
-    if not resume or not os.path.exists(resume.file_path):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resume file not found")
+    if not resume:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resume not found")
 
-    media_type = "application/pdf" if resume.file_type == "pdf" else "application/octet-stream"
-    return FileResponse(
-        path=resume.file_path,
-        filename=resume.filename,
-        media_type=media_type,
+    # If physical file exists on disk, serve it directly
+    if resume.file_path and os.path.exists(resume.file_path):
+        media_type = "application/pdf" if (resume.file_type or "").lower() == "pdf" else "application/octet-stream"
+        return FileResponse(
+            path=resume.file_path,
+            filename=resume.filename or "Master_Resume.pdf",
+            media_type=media_type,
+        )
+
+    # Cloud Resilience: If physical file was wiped on container restart (ephemeral disk),
+    # dynamically regenerate the Master Resume PDF from candidate profile facts so download NEVER fails
+    profile = db.scalar(select(CandidateProfile).where(CandidateProfile.user_id == current_user.id))
+    if not profile:
+        profile = CandidateProfile(user_id=current_user.id)
+
+    from app.services.tailoring.resume_pdf_generator import tailored_pdf_generator
+    safe_filename = resume.filename if (resume.filename and resume.filename.lower().endswith(".pdf")) else "Master_Resume.pdf"
+    generated_path = tailored_pdf_generator.generate_master_resume_pdf(
+        profile=profile,
+        resume=resume,
+        output_filename=safe_filename,
     )
+    resume.file_path = str(generated_path)
+    resume.file_type = "pdf"
+    db.commit()
+
+    return FileResponse(
+        path=str(generated_path),
+        filename=safe_filename,
+        media_type="application/pdf",
+    )
+
+
+# Plural alias router to ensure /api/v1/resumes/{id}/download also works seamlessly
+resumes_alias_router = APIRouter(prefix="/resumes", tags=["resumes-alias"])
+
+
+@resumes_alias_router.get("/{resume_id}/download")
+def download_resume_alias(
+    resume_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Plural endpoint alias for downloading resume."""
+    return download_resume(resume_id=resume_id, current_user=current_user, db=db)
+
 
