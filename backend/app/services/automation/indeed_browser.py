@@ -14,7 +14,13 @@ from pathlib import Path
 import random
 from typing import Any
 
-from playwright.async_api import async_playwright, Page
+try:
+    from playwright.async_api import async_playwright, Page
+    PLAYWRIGHT_AVAILABLE = True
+except ImportError:
+    PLAYWRIGHT_AVAILABLE = False
+    async_playwright = None
+    Page = Any  # type: ignore
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -164,6 +170,13 @@ class IndeedBrowserBot:
         dry_run: bool = False,
     ) -> dict[str, Any]:
         """Safely navigate to Indeed job posting and execute apply."""
+        if not PLAYWRIGHT_AVAILABLE or async_playwright is None:
+            return {
+                "success": False,
+                "status": "error",
+                "message": "Playwright is not installed or available in this environment.",
+            }
+
         async with async_playwright() as p:
             context = None
             for ch in ["msedge", None]:

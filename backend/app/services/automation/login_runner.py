@@ -10,7 +10,10 @@ import subprocess
 import sys
 import urllib.parse
 
-from playwright.async_api import async_playwright
+try:
+    from playwright.async_api import async_playwright
+except ImportError:
+    async_playwright = None
 
 LOG_FILE = Path(__file__).resolve().parents[4] / "browser_automation.log"
 logging.basicConfig(
