@@ -320,11 +320,13 @@ class TailoredResumePdfGenerator:
         # Dynamic Subtitle: Adapt to target domain and candidate's experience
         candidate_primary_title = None
         if profile.experience and isinstance(profile.experience, list) and len(profile.experience) > 0:
-            candidate_primary_title = profile.experience[0].get("title")
+            first_exp = profile.experience[0]
+            candidate_primary_title = first_exp.get("title") if isinstance(first_exp, dict) else str(first_exp)
         if not candidate_primary_title and original_resume and original_resume.parsed_data:
             orig_exp = original_resume.parsed_data.get("experience")
             if orig_exp and isinstance(orig_exp, list) and len(orig_exp) > 0:
-                candidate_primary_title = orig_exp[0].get("title")
+                first_orig = orig_exp[0]
+                candidate_primary_title = first_orig.get("title") if isinstance(first_orig, dict) else str(first_orig)
         if not candidate_primary_title:
             candidate_primary_title = job.title or "Professional"
 
@@ -417,10 +419,22 @@ class TailoredResumePdfGenerator:
             elements.append(self._make_hr())
 
             for exp in experiences:
-                exp_title = exp.get("title") or "Professional"
-                exp_company = exp.get("company") or exp.get("organization") or ""
-                exp_location = exp.get("location") or profile.location or ""
-                exp_dates = exp.get("dates") or f"{exp.get('start', '')} – {exp.get('end', '')}".strip(" –")
+                if isinstance(exp, dict):
+                    exp_title = exp.get("title") or "Professional"
+                    exp_company = exp.get("company") or exp.get("organization") or ""
+                    exp_location = exp.get("location") or profile.location or ""
+                    exp_dates = exp.get("dates") or f"{exp.get('start', '')} – {exp.get('end', '')}".strip(" –")
+                    bullets = exp.get("bullets")
+                    if not bullets and exp.get("description"):
+                        bullets = extract_clean_bullets(exp.get("description"))
+                    exp_desc = exp.get("description")
+                else:
+                    exp_title = str(exp)
+                    exp_company = ""
+                    exp_location = profile.location or ""
+                    exp_dates = ""
+                    bullets = None
+                    exp_desc = None
 
                 title_comp = f"<b>{safe_xml(exp_title)}</b>"
                 if exp_company:
@@ -448,15 +462,11 @@ class TailoredResumePdfGenerator:
                 elements.append(header_table)
                 elements.append(Spacer(1, 1.5))
 
-                bullets = exp.get("bullets")
-                if not bullets and exp.get("description"):
-                    bullets = extract_clean_bullets(exp.get("description"))
-
                 if bullets and isinstance(bullets, list):
                     for b in bullets[:4]:
                         elements.append(Paragraph(f"• {safe_xml(b)}", styles["bullet"]))
-                elif exp.get("description"):
-                    elements.append(Paragraph(safe_xml(exp.get("description")), styles["body"]))
+                elif exp_desc:
+                    elements.append(Paragraph(safe_xml(exp_desc), styles["body"]))
 
                 elements.append(Spacer(1, 2.5))
 
@@ -472,21 +482,28 @@ class TailoredResumePdfGenerator:
             elements.append(self._make_hr())
 
             for p in projects[:3]:
-                p_name = p.get("name") or "Project"
-                p_tech = p.get("tech") or p.get("technologies") or ""
+                if isinstance(p, dict):
+                    p_name = p.get("name") or "Project"
+                    p_tech = p.get("tech") or p.get("technologies") or ""
+                    p_bullets = p.get("bullets")
+                    if not p_bullets and p.get("description"):
+                        p_bullets = extract_clean_bullets(p.get("description"))
+                    p_desc = p.get("description")
+                else:
+                    p_name = str(p)
+                    p_tech = ""
+                    p_bullets = None
+                    p_desc = None
+
                 elements.append(Paragraph(f"<b>{safe_xml(p_name)}</b>", styles["job_title"]))
                 if p_tech:
                     elements.append(Paragraph(f"Technologies / Tools: {safe_xml(p_tech)}", styles["project_tech"]))
 
-                p_bullets = p.get("bullets")
-                if not p_bullets and p.get("description"):
-                    p_bullets = extract_clean_bullets(p.get("description"))
-
                 if p_bullets and isinstance(p_bullets, list):
                     for b in p_bullets[:3]:
                         elements.append(Paragraph(f"• {safe_xml(b)}", styles["bullet"]))
-                elif p.get("description"):
-                    elements.append(Paragraph(safe_xml(p.get("description")), styles["body"]))
+                elif p_desc:
+                    elements.append(Paragraph(safe_xml(p_desc), styles["body"]))
 
                 elements.append(Spacer(1, 2.5))
 
@@ -602,10 +619,20 @@ class TailoredResumePdfGenerator:
             elements.append(Paragraph("PROFESSIONAL EXPERIENCE", styles["section_heading"]))
             elements.append(self._make_hr())
             for exp in experiences:
-                exp_title = exp.get("title") or "Professional"
-                exp_company = exp.get("company") or ""
-                exp_location = exp.get("location") or ""
-                exp_dates = exp.get("dates") or f"{exp.get('start', '')} – {exp.get('end', '')}".strip(" –")
+                if isinstance(exp, dict):
+                    exp_title = exp.get("title") or "Professional"
+                    exp_company = exp.get("company") or ""
+                    exp_location = exp.get("location") or ""
+                    exp_dates = exp.get("dates") or f"{exp.get('start', '')} – {exp.get('end', '')}".strip(" –")
+                    bullets = exp.get("bullets") or (extract_clean_bullets(exp.get("description")) if exp.get("description") else None)
+                    exp_desc = exp.get("description")
+                else:
+                    exp_title = str(exp)
+                    exp_company = ""
+                    exp_location = ""
+                    exp_dates = ""
+                    bullets = None
+                    exp_desc = None
 
                 title_comp = f"<b>{safe_xml(exp_title)}</b>"
                 if exp_company:
@@ -628,12 +655,11 @@ class TailoredResumePdfGenerator:
                 elements.append(header_table)
                 elements.append(Spacer(1, 1.5))
 
-                bullets = exp.get("bullets") or (extract_clean_bullets(exp.get("description")) if exp.get("description") else None)
                 if bullets and isinstance(bullets, list):
                     for b in bullets[:4]:
                         elements.append(Paragraph(f"• {safe_xml(b)}", styles["bullet"]))
-                elif exp.get("description"):
-                    elements.append(Paragraph(safe_xml(exp.get("description")), styles["body"]))
+                elif exp_desc:
+                    elements.append(Paragraph(safe_xml(exp_desc), styles["body"]))
                 elements.append(Spacer(1, 2.5))
 
         # Education
@@ -642,9 +668,14 @@ class TailoredResumePdfGenerator:
             elements.append(Paragraph("EDUCATION", styles["section_heading"]))
             elements.append(self._make_hr())
             for edu in education:
-                deg = edu.get("degree") or "Degree"
-                inst = edu.get("institution") or ""
-                yr = edu.get("year") or ""
+                if isinstance(edu, dict):
+                    deg = edu.get("degree") or "Degree"
+                    inst = edu.get("institution") or ""
+                    yr = edu.get("year") or ""
+                else:
+                    deg = str(edu)
+                    inst = ""
+                    yr = ""
                 parts = [p for p in [f"<b>{safe_xml(deg)}</b>", safe_xml(inst), safe_xml(yr)] if p and p != "<b></b>"]
                 elements.append(Paragraph(" &nbsp;|&nbsp; ".join(parts), styles["body"]))
 

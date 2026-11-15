@@ -392,20 +392,28 @@ def get_tailored_resume_pdf(
         select(Resume).where(Resume.user_id == current_user.id).order_by(desc(Resume.created_at))
     )
 
-    from app.services.tailoring.resume_pdf_generator import tailored_pdf_generator
-    pdf_path = tailored_pdf_generator.generate_pdf(
-        profile=profile,
-        job=job,
-        matched_skills=matched_skills,
-        missing_skills=missing_skills,
-        tailored_summary=tailored_summary,
-        original_resume=original_resume,
-    )
+    try:
+        from app.services.tailoring.resume_pdf_generator import tailored_pdf_generator
+        pdf_path = tailored_pdf_generator.generate_pdf(
+            profile=profile,
+            job=job,
+            matched_skills=matched_skills,
+            missing_skills=missing_skills,
+            tailored_summary=tailored_summary,
+            original_resume=original_resume,
+        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate tailored resume PDF: {str(e)}",
+        )
 
     app.tailored_resume_path = str(pdf_path)
     db.commit()
 
-    sanitized_comp = "".join(c for c in job.company if c.isalnum() or c in ("-", "_"))
+    sanitized_comp = "".join(c for c in (job.company or "Job") if c.isalnum() or c in ("-", "_"))
     candidate_clean = re.sub(r"[^a-zA-Z0-9]", "_", profile.full_name or "Candidate").strip("_")
     filename = f"Tailored_Resume_{candidate_clean}_{sanitized_comp}.pdf"
 

@@ -431,6 +431,10 @@ export default function ApprovalQueuePage() {
   };
 
   const handleDownloadTailoredPdf = async (appId: number, company: string) => {
+    if (!appId) {
+      toast.error('Application not selected or ready yet.', { id: 'pdf-dl' });
+      return;
+    }
     try {
       const token = localStorage.getItem('access_token');
       toast.loading('Generating Tailored Resume PDF...', { id: 'pdf-dl' });
@@ -459,6 +463,10 @@ export default function ApprovalQueuePage() {
   };
 
   const handleDownloadMasterPdf = async (masterResumeId: number, filename: string) => {
+    if (!masterResumeId) {
+      toast.error('No master resume uploaded yet. Please upload your resume in Resume & Profile.', { id: 'pdf-dl' });
+      return;
+    }
     try {
       const token = localStorage.getItem('access_token');
       toast.loading('Downloading Master Resume PDF...', { id: 'pdf-dl' });
