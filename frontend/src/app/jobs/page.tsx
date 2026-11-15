@@ -23,6 +23,7 @@ import {
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { API_BASE_URL } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScoreBadge } from '@/components/ui/score-badge';
@@ -47,7 +48,7 @@ export default function JobsPage() {
   useEffect(() => {
     async function loadUserPreference() {
       try {
-        const res = await fetch('http://localhost:8000/api/v1/preferences/', {
+        const res = await fetch(`${API_BASE_URL}/preferences/`, {
           headers: {
             Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`,
           },
@@ -69,7 +70,7 @@ export default function JobsPage() {
     async function fetchJobs() {
       setLoading(true);
       try {
-        let url = 'http://localhost:8000/api/v1/jobs/?size=50';
+        let url = `${API_BASE_URL}/jobs/?size=50`;
         if (platform !== 'all') url += `&platform=${platform}`;
         if (workMode !== 'all') url += `&work_mode=${workMode}`;
         if (companyType !== 'all') url += `&company_type=${companyType}`;
@@ -130,7 +131,7 @@ export default function JobsPage() {
     setBulkQueuing(true);
     toast.loading(`Tailoring documents for ${jobIds.length} job(s)...`, { id: 'queue-jobs' });
     try {
-      const res = await fetch('http://localhost:8000/api/v1/applications/bulk-apply', {
+      const res = await fetch(`${API_BASE_URL}/applications/bulk-apply`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -168,7 +169,7 @@ export default function JobsPage() {
     toast.info(`Opening ${platformName} portal in your logged-in Chrome session...`, { duration: 4000 });
 
     try {
-      const res = await fetch('http://localhost:8000/api/v1/browser/open-portal-apply', {
+      const res = await fetch(`${API_BASE_URL}/browser/open-portal-apply`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -210,7 +211,7 @@ export default function JobsPage() {
     setBulkApplying(true);
     toast.loading(`Launching browser automation for ${jobIds.length} job(s)...`, { id: 'apply-jobs' });
     try {
-      const res = await fetch('http://localhost:8000/api/v1/browser/apply-stealth', {
+      const res = await fetch(`${API_BASE_URL}/browser/apply-stealth`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

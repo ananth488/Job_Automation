@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/use-auth';
+import { API_BASE_URL } from '@/lib/api';
 
 export interface SidebarProps {
   isOpen: boolean;
@@ -35,10 +36,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     if (!token) return;
 
     Promise.all([
-      fetch('http://localhost:8000/api/v1/dashboard/stats', {
+      fetch(`${API_BASE_URL}/dashboard/stats`, {
         headers: { Authorization: `Bearer ${token}` },
       }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
-      fetch('http://localhost:8000/api/v1/notifications/unread-count', {
+      fetch(`${API_BASE_URL}/notifications/unread-count`, {
         headers: { Authorization: `Bearer ${token}` },
       }).then((r) => (r.ok ? r.json() : { count: 0 })).catch(() => ({ count: 0 })),
     ]).then(([statsData, notifData]) => {

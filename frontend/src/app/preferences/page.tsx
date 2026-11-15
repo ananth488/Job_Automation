@@ -17,6 +17,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { MultiLocationInput } from '@/components/ui/location-autocomplete';
+import { API_BASE_URL } from '@/lib/api';
 
 export default function PreferencesPage() {
   const [pref, setPref] = useState<{
@@ -54,7 +55,7 @@ export default function PreferencesPage() {
   useEffect(() => {
     async function loadPref() {
       try {
-        const res = await fetch('http://localhost:8000/api/v1/preferences/', {
+        const res = await fetch(`${API_BASE_URL}/preferences/`, {
           headers: {
             Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`,
           },
@@ -120,7 +121,7 @@ export default function PreferencesPage() {
         posted_within_days: Number(pref.posted_within_days) || 30,
       };
 
-      const res = await fetch('http://localhost:8000/api/v1/preferences/', {
+      const res = await fetch(`${API_BASE_URL}/preferences/`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

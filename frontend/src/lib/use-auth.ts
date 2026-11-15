@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { API_BASE_URL } from '@/lib/api';
 
 export interface CurrentUser {
   id: number | string;
@@ -31,7 +32,7 @@ export function useAuth() {
       return;
     }
 
-    fetch('http://localhost:8000/api/v1/auth/me', {
+    fetch(`${API_BASE_URL}/auth/me`, {
       headers: {
         Authorization: `Bearer ${token}`,
       },

@@ -23,6 +23,7 @@ import { toast } from 'sonner';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { API_BASE_URL } from '@/lib/api';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { LocationAutocomplete } from '@/components/ui/location-autocomplete';
@@ -133,10 +134,10 @@ export default function ProfilePage() {
       try {
         const token = localStorage.getItem('access_token') || '';
         const [profileRes, resumesRes] = await Promise.all([
-          fetch('http://localhost:8000/api/v1/profile/', {
+          fetch(`${API_BASE_URL}/profile/`, {
             headers: { Authorization: `Bearer ${token}` },
           }),
-          fetch('http://localhost:8000/api/v1/resume/', {
+          fetch(`${API_BASE_URL}/resume/`, {
             headers: { Authorization: `Bearer ${token}` },
           }),
         ]);
@@ -240,7 +241,7 @@ export default function ProfilePage() {
         preferred_locations: Array.isArray(profile.preferred_locations) ? profile.preferred_locations : [],
       };
 
-      const res = await fetch('http://localhost:8000/api/v1/profile/', {
+      const res = await fetch(`${API_BASE_URL}/profile/`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -253,7 +254,7 @@ export default function ProfilePage() {
         throw new Error('Failed to update candidate profile');
       }
 
-      await fetch('http://localhost:8000/api/v1/profile/verify', {
+      await fetch(`${API_BASE_URL}/profile/verify`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`,
@@ -298,7 +299,7 @@ export default function ProfilePage() {
     formData.append('file', file);
 
     try {
-      const res = await fetch('http://localhost:8000/api/v1/resume/upload', {
+      const res = await fetch(`${API_BASE_URL}/resume/upload`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`,
@@ -451,7 +452,7 @@ export default function ProfilePage() {
                       size="sm"
                       onClick={(e) => {
                         e.stopPropagation();
-                        window.open(`http://localhost:8000/api/v1/resume/${latestResume.id}/download`, '_blank');
+                        window.open(`${API_BASE_URL}/resume/${latestResume.id}/download`, '_blank');
                       }}
                       className="cursor-pointer text-xs bg-white hover:bg-slate-50"
                       title="Download active resume"

@@ -29,6 +29,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScoreBadge } from '@/components/ui/score-badge';
 import { Modal } from '@/components/ui/modal';
 import { toast } from 'sonner';
+import { API_BASE_URL } from '@/lib/api';
 
 export default function ApprovalQueuePage() {
   const [items, setItems] = useState<any[]>([]);
@@ -57,7 +58,7 @@ export default function ApprovalQueuePage() {
 
   const checkSessionStatus = async () => {
     try {
-      const res = await fetch('http://localhost:8000/api/v1/browser/session-status', {
+      const res = await fetch(`${API_BASE_URL}/browser/session-status`, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`,
         },
@@ -74,7 +75,7 @@ export default function ApprovalQueuePage() {
   const handleOpenLogin = async (platform: string) => {
     try {
       toast.info(`Opening ${platform === 'indeed' ? 'Indeed' : 'Naukri'} login window on your desktop...`);
-      const res = await fetch(`http://localhost:8000/api/v1/browser/open-login?platform=${platform}`, {
+      const res = await fetch(`${API_BASE_URL}/browser/open-login?platform=${platform}`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`,
@@ -84,7 +85,7 @@ export default function ApprovalQueuePage() {
         toast.success(`Browser window opened! Sign in to your ${platform === 'indeed' ? 'Indeed' : 'Naukri'} account and close the window.`);
         const poll = setInterval(async () => {
           try {
-            const sRes = await fetch('http://localhost:8000/api/v1/browser/session-status', {
+            const sRes = await fetch(`${API_BASE_URL}/browser/session-status`, {
               headers: { Authorization: `Bearer ${localStorage.getItem('access_token') || ''}` },
             });
             if (sRes.ok) {
@@ -130,7 +131,7 @@ export default function ApprovalQueuePage() {
     });
 
     try {
-      const res = await fetch('http://localhost:8000/api/v1/browser/apply-stealth', {
+      const res = await fetch(`${API_BASE_URL}/browser/apply-stealth`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -198,7 +199,7 @@ export default function ApprovalQueuePage() {
     setBulkApproving(true);
     toast.loading(`Approving & submitting ${ids.length} applications...`, { id: 'bulk-approve' });
     try {
-      const res = await fetch('http://localhost:8000/api/v1/applications/bulk-approve', {
+      const res = await fetch(`${API_BASE_URL}/applications/bulk-approve`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -227,7 +228,7 @@ export default function ApprovalQueuePage() {
   const loadQueue = async (days?: string) => {
     try {
       const activeDays = days !== undefined ? days : postedWithin;
-      let url = 'http://localhost:8000/api/v1/applications/approval-queue';
+      let url = `${API_BASE_URL}/applications/approval-queue`;
       if (activeDays !== 'all') {
         url += `?posted_within_days=${activeDays}`;
       }
@@ -253,7 +254,7 @@ export default function ApprovalQueuePage() {
   };
 
   useEffect(() => {
-    fetch('http://localhost:8000/api/v1/preferences', {
+    fetch(`${API_BASE_URL}/preferences`, {
       headers: { Authorization: `Bearer ${localStorage.getItem('access_token') || ''}` },
     })
       .then((r) => (r.ok ? r.json() : null))
@@ -307,7 +308,7 @@ export default function ApprovalQueuePage() {
 
     // 3. Mark application as applied in DB and move to Tracker
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/applications/${item.application_id}/approve`, {
+      const res = await fetch(`${API_BASE_URL}/applications/${item.application_id}/approve`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`,
@@ -338,7 +339,7 @@ export default function ApprovalQueuePage() {
     toast.info(`Opening ${platformName} portal in your logged-in Chrome browser...`, { duration: 4000 });
 
     try {
-      const res = await fetch('http://localhost:8000/api/v1/browser/open-portal-apply', {
+      const res = await fetch(`${API_BASE_URL}/browser/open-portal-apply`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -369,7 +370,7 @@ export default function ApprovalQueuePage() {
 
   const handleApprove = async (appId: number) => {
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/applications/${appId}/approve`, {
+      const res = await fetch(`${API_BASE_URL}/applications/${appId}/approve`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`,
@@ -388,7 +389,7 @@ export default function ApprovalQueuePage() {
 
   const handleReject = async (appId: number) => {
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/applications/${appId}/reject`, {
+      const res = await fetch(`${API_BASE_URL}/applications/${appId}/reject`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`,
@@ -411,7 +412,7 @@ export default function ApprovalQueuePage() {
     );
     try {
       const token = localStorage.getItem('access_token');
-      await fetch(`http://localhost:8000/api/v1/applications/${appId}/select-resume`, {
+      await fetch(`${API_BASE_URL}/applications/${appId}/select-resume`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -433,7 +434,7 @@ export default function ApprovalQueuePage() {
     try {
       const token = localStorage.getItem('access_token');
       toast.loading('Generating Tailored Resume PDF (Naukri Neo Style)...', { id: 'pdf-dl' });
-      const res = await fetch(`http://localhost:8000/api/v1/applications/${appId}/tailored-pdf`, {
+      const res = await fetch(`${API_BASE_URL}/applications/${appId}/tailored-pdf`, {
         headers: { Authorization: `Bearer ${token || ''}` },
       });
       if (!res.ok) throw new Error('Failed to generate PDF');
@@ -456,7 +457,7 @@ export default function ApprovalQueuePage() {
     try {
       const token = localStorage.getItem('access_token');
       toast.loading('Downloading Master Resume PDF...', { id: 'pdf-dl' });
-      const res = await fetch(`http://localhost:8000/api/v1/resumes/${masterResumeId}/download`, {
+      const res = await fetch(`${API_BASE_URL}/resumes/${masterResumeId}/download`, {
         headers: { Authorization: `Bearer ${token || ''}` },
       });
       if (!res.ok) throw new Error('Failed to download master resume');

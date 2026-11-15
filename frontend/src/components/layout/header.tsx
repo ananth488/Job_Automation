@@ -7,6 +7,7 @@ import { Menu, Bell, Play, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/use-auth';
+import { API_BASE_URL } from '@/lib/api';
 
 export interface HeaderProps {
   onMenuToggle: () => void;
@@ -35,10 +36,10 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle, title = 'Dashboard
     }
 
     Promise.all([
-      fetch('http://localhost:8000/api/v1/profile/', {
+      fetch(`${API_BASE_URL}/profile/`, {
         headers: { Authorization: `Bearer ${token}` },
       }).then((r) => (r.ok ? r.json() : null)),
-      fetch('http://localhost:8000/api/v1/browser/session-status', {
+      fetch(`${API_BASE_URL}/browser/session-status`, {
         headers: { Authorization: `Bearer ${token}` },
       }).then((r) => (r.ok ? r.json() : null)),
     ])
@@ -111,7 +112,7 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle, title = 'Dashboard
 
     setIsRunning(true);
     try {
-      const res = await fetch('http://localhost:8000/api/v1/bot/run-now', {
+      const res = await fetch(`${API_BASE_URL}/bot/run-now`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

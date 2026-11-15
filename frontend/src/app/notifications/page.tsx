@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { formatRelativeTime } from '@/lib/utils';
 import { toast } from 'sonner';
+import { API_BASE_URL } from '@/lib/api';
 
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -26,7 +27,7 @@ export default function NotificationsPage() {
   useEffect(() => {
     async function loadNotifs() {
       try {
-        const res = await fetch('http://localhost:8000/api/v1/notifications/', {
+        const res = await fetch(`${API_BASE_URL}/notifications/`, {
           headers: {
             Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`,
           },
@@ -46,7 +47,7 @@ export default function NotificationsPage() {
 
   const handleMarkAllRead = async () => {
     try {
-      await fetch('http://localhost:8000/api/v1/notifications/read-all', {
+      await fetch(`${API_BASE_URL}/notifications/read-all`, {
         method: 'PUT',
         headers: {
           Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`,
@@ -61,7 +62,7 @@ export default function NotificationsPage() {
 
   const handleMarkSingleRead = async (id: number) => {
     try {
-      await fetch(`http://localhost:8000/api/v1/notifications/${id}/read`, {
+      await fetch(`${API_BASE_URL}/notifications/${id}/read`, {
         method: 'PUT',
         headers: {
           Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`,

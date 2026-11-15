@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/button';
 import { ScoreBadge } from '@/components/ui/score-badge';
 import { Badge } from '@/components/ui/badge';
 import { formatSalary } from '@/lib/utils';
+import { API_BASE_URL } from '@/lib/api';
 import { useAuth } from '@/lib/use-auth';
 
 export default function DashboardPage() {
@@ -67,22 +68,22 @@ export default function DashboardPage() {
     try {
       const token = localStorage.getItem('access_token') || '';
       const [statsRes, jobsRes, prefRes, botRes, sessionRes, profileRes] = await Promise.all([
-        fetch('http://localhost:8000/api/v1/dashboard/stats', {
+        fetch(`${API_BASE_URL}/dashboard/stats`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        fetch('http://localhost:8000/api/v1/jobs/?size=5', {
+        fetch(`${API_BASE_URL}/jobs/?size=5`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        fetch('http://localhost:8000/api/v1/preferences/', {
+        fetch(`${API_BASE_URL}/preferences/`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        fetch('http://localhost:8000/api/v1/bot/status', {
+        fetch(`${API_BASE_URL}/bot/status`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        fetch('http://localhost:8000/api/v1/browser/session-status', {
+        fetch(`${API_BASE_URL}/browser/session-status`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        fetch('http://localhost:8000/api/v1/profile/', {
+        fetch(`${API_BASE_URL}/profile/`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
       ]);

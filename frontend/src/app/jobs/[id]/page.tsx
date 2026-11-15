@@ -23,6 +23,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScoreBadge } from '@/components/ui/score-badge';
+import { API_BASE_URL } from '@/lib/api';
 import { formatSalary } from '@/lib/utils';
 
 function JobDetailContent() {
@@ -38,7 +39,7 @@ function JobDetailContent() {
   useEffect(() => {
     async function loadJob() {
       try {
-        const res = await fetch(`http://localhost:8000/api/v1/jobs/${jobId}`, {
+        const res = await fetch(`${API_BASE_URL}/jobs/${jobId}`, {
           headers: {
             Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`,
           },
@@ -65,7 +66,7 @@ function JobDetailContent() {
     setOpeningPortal(true);
 
     try {
-      const res = await fetch('http://localhost:8000/api/v1/browser/open-portal-apply', {
+      const res = await fetch(`${API_BASE_URL}/browser/open-portal-apply`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -93,7 +94,7 @@ function JobDetailContent() {
   const handlePrepareApplication = async () => {
     setPreparing(true);
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/applications/prepare/${jobId}`, {
+      const res = await fetch(`${API_BASE_URL}/applications/prepare/${jobId}`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`,

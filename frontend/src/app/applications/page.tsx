@@ -25,6 +25,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { formatDate } from '@/lib/utils';
 import { toast } from 'sonner';
+import { API_BASE_URL } from '@/lib/api';
 
 export default function ApplicationsPage() {
   const [activeTab, setActiveTab] = useState('all');
@@ -36,7 +37,7 @@ export default function ApplicationsPage() {
     setSyncing(true);
     toast.loading('Syncing applied jobs from your official Naukri account...', { id: 'naukri-sync' });
     try {
-      const res = await fetch('http://localhost:8000/api/v1/browser/sync-naukri-applied', {
+      const res = await fetch(`${API_BASE_URL}/browser/sync-naukri-applied`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`,
@@ -45,7 +46,7 @@ export default function ApplicationsPage() {
       if (res.ok) {
         const data = await res.json();
         toast.success(data.message || 'Synced successfully!', { id: 'naukri-sync' });
-        const aRes = await fetch('http://localhost:8000/api/v1/applications/', {
+        const aRes = await fetch(`${API_BASE_URL}/applications/`, {
           headers: { Authorization: `Bearer ${localStorage.getItem('access_token') || ''}` },
         });
         if (aRes.ok) {
@@ -66,7 +67,7 @@ export default function ApplicationsPage() {
   useEffect(() => {
     async function loadApps() {
       try {
-        const res = await fetch('http://localhost:8000/api/v1/applications/', {
+        const res = await fetch(`${API_BASE_URL}/applications/`, {
           headers: {
             Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`,
           },
@@ -86,7 +87,7 @@ export default function ApplicationsPage() {
 
   const handleUpdateStatus = async (appId: number, newStatus: string) => {
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/applications/${appId}/status`, {
+      const res = await fetch(`${API_BASE_URL}/applications/${appId}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -110,7 +111,7 @@ export default function ApplicationsPage() {
   const handleRetryPortal = async (app: any) => {
     try {
       toast.info(`Opening ${app.company} in browser to retry...`);
-      const res = await fetch('http://localhost:8000/api/v1/browser/open-portal-apply', {
+      const res = await fetch(`${API_BASE_URL}/browser/open-portal-apply`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

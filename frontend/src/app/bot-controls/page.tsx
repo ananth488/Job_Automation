@@ -28,6 +28,7 @@ import {
   KeyRound,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { API_BASE_URL } from '@/lib/api';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -81,16 +82,16 @@ export default function BotControlsPage() {
 
     try {
       const [statusRes, runsRes, profileRes, sessionRes] = await Promise.all([
-        fetch('http://localhost:8000/api/v1/bot/status', {
+        fetch(`${API_BASE_URL}/bot/status`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        fetch('http://localhost:8000/api/v1/bot/runs', {
+        fetch(`${API_BASE_URL}/bot/runs`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        fetch('http://localhost:8000/api/v1/profile/', {
+        fetch(`${API_BASE_URL}/profile/`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        fetch('http://localhost:8000/api/v1/browser/session-status', {
+        fetch(`${API_BASE_URL}/browser/session-status`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
       ]);
@@ -171,7 +172,7 @@ export default function BotControlsPage() {
     setLogs((prev) => [...prev, `[BROWSER] Launching dedicated Chrome window for ${platformName} authentication...`]);
 
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/browser/open-login?platform=${platform}`, {
+      const res = await fetch(`${API_BASE_URL}/browser/open-login?platform=${platform}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -183,7 +184,7 @@ export default function BotControlsPage() {
         // Poll session-status every 3 seconds to auto-detect when candidate completes login
         const pollTimer = setInterval(async () => {
           try {
-            const sRes = await fetch('http://localhost:8000/api/v1/browser/session-status', {
+            const sRes = await fetch(`${API_BASE_URL}/browser/session-status`, {
               headers: { Authorization: `Bearer ${token}` },
             });
             if (sRes.ok) {
@@ -226,7 +227,7 @@ export default function BotControlsPage() {
     setConfirmingLoading(true);
 
     try {
-      const res = await fetch('http://localhost:8000/api/v1/browser/confirm-connection', {
+      const res = await fetch(`${API_BASE_URL}/browser/confirm-connection`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -263,7 +264,7 @@ export default function BotControlsPage() {
     const platformName = platform === 'indeed' ? 'Indeed' : 'Naukri';
 
     try {
-      const res = await fetch('http://localhost:8000/api/v1/browser/confirm-connection', {
+      const res = await fetch(`${API_BASE_URL}/browser/confirm-connection`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -303,7 +304,7 @@ export default function BotControlsPage() {
     }
 
     try {
-      const res = await fetch('http://localhost:8000/api/v1/bot/start', {
+      const res = await fetch(`${API_BASE_URL}/bot/start`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -329,7 +330,7 @@ export default function BotControlsPage() {
   const handlePause = async () => {
     const token = localStorage.getItem('access_token');
     try {
-      const res = await fetch('http://localhost:8000/api/v1/bot/pause', {
+      const res = await fetch(`${API_BASE_URL}/bot/pause`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token || ''}` },
       });
@@ -346,7 +347,7 @@ export default function BotControlsPage() {
   const handleStop = async () => {
     const token = localStorage.getItem('access_token');
     try {
-      const res = await fetch('http://localhost:8000/api/v1/bot/stop', {
+      const res = await fetch(`${API_BASE_URL}/bot/stop`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token || ''}` },
       });
@@ -378,7 +379,7 @@ export default function BotControlsPage() {
     setBotStatus((prev: any) => ({ ...prev, status: 'executing' }));
     setLogs((prev) => [...prev, '[TRIGGER] Manual on-demand cycle initiated...']);
     try {
-      const res = await fetch('http://localhost:8000/api/v1/bot/run-now', {
+      const res = await fetch(`${API_BASE_URL}/bot/run-now`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });
