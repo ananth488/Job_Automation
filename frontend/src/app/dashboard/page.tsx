@@ -260,13 +260,36 @@ export default function DashboardPage() {
             <Card>
               <CardHeader>
                 <div>
-                  <CardTitle>Top AI-Matched Opportunities</CardTitle>
-                  <p className="text-xs text-slate-500">Sorted by relevance to your verified resume profile</p>
+                  <CardTitle>
+                    {candidateProfile?.is_verified ? 'Top AI-Matched Opportunities' : 'Discovered Market Opportunities (50 Jobs)'}
+                  </CardTitle>
+                  <p className="text-xs text-slate-500">
+                    {candidateProfile?.is_verified
+                      ? 'Sorted by relevance to your verified resume profile'
+                      : 'Live market vacancies discovered from Naukri & Indeed. Upload your resume to see your personalized AI match %'}
+                  </p>
                 </div>
                 <Link href="/jobs" className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1">
                   View All Jobs <ArrowUpRight className="w-3.5 h-3.5" />
                 </Link>
               </CardHeader>
+
+              {!candidateProfile?.is_verified && (
+                <div className="mx-4 sm:mx-6 my-2 p-3.5 rounded-xl bg-indigo-50/80 border border-indigo-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-indigo-900">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-indigo-600 shrink-0" />
+                    <span>
+                      These 50 jobs are live postings in the market database. <strong>Upload your master resume</strong> to calculate your ATS match scores!
+                    </span>
+                  </div>
+                  <Link href="/profile">
+                    <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white shrink-0 text-xs h-7.5 px-3 shadow-xs">
+                      <Upload className="w-3.5 h-3.5 mr-1" />
+                      Upload Resume
+                    </Button>
+                  </Link>
+                </div>
+              )}
 
               <CardContent className="divide-y divide-slate-100 p-0">
                 {recentJobs.length === 0 ? (
