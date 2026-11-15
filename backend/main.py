@@ -227,22 +227,6 @@ async def lifespan(app: FastAPI):
     # Ensure all tables exist in target database (SQLite or Neon PostgreSQL)
     Base.metadata.create_all(bind=engine)
 
-    # Perform initial seed or full database reset if requested
-    if not RESET_FLAG_FILE.exists():
-        reset_database_fully()
-        await seed_initial_fresh_jobs()
-    else:
-        # Check if database is empty (e.g. freshly connected Neon Postgres)
-        check_db: Session = SessionLocal()
-        try:
-            if check_db.query(Job).count() == 0:
-                print("[DATABASE] Fresh database detected with 0 jobs. Seeding initial fresh jobs...")
-                await seed_initial_fresh_jobs()
-        except Exception as e:
-            print(f"[DATABASE] Job count check note: {e}")
-        finally:
-            check_db.close()
-
     # Sync company career links to fix any previous mismatches
     sync_company_career_links()
 

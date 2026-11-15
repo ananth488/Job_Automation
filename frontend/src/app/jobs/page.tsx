@@ -279,13 +279,13 @@ export default function JobsPage() {
         {profile && (!profile.skills || profile.skills.length === 0) && (
           <div className="bg-gradient-to-r from-amber-500/10 via-indigo-500/10 to-transparent p-4 rounded-2xl border border-amber-200/80 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <span className="text-2xl">💼</span>
+              <span className="text-2xl">📄</span>
               <div>
                 <p className="text-xs font-bold text-slate-900">
-                  Showing featured positions across Medical Coding, Healthcare, Tech, Finance & HR
+                  Step 1: Upload Your Resume First
                 </p>
                 <p className="text-[11px] text-slate-600 mt-0.5">
-                  Upload your master resume in <strong>Resume & Profile</strong> to automatically filter and AI-score jobs matching your career domain!
+                  Upload your master resume in <strong>Resume & Profile</strong> so your skills across any domain are parsed dynamically. Then run the bot to fetch jobs tailored specifically for you.
                 </p>
               </div>
             </div>
@@ -298,16 +298,38 @@ export default function JobsPage() {
           </div>
         )}
 
-        {profile && profile.skills && profile.skills.length > 0 && (
+        {profile && profile.skills && profile.skills.length > 0 && jobs.length === 0 && (
+          <div className="bg-gradient-to-r from-indigo-50/80 via-emerald-50/50 to-white p-4 rounded-2xl border border-indigo-100 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">🤖</span>
+              <div>
+                <p className="text-xs font-bold text-slate-900">
+                  Step 2: Trigger Bot Search to Fetch Jobs
+                </p>
+                <p className="text-[11px] text-slate-600 mt-0.5">
+                  Your profile has <strong>{profile.skills.length} verified skills</strong>. Go to <strong>Bot Controls</strong> and click <strong>Run Bot Now</strong> to search and score live positions matching your career!
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/bot-controls"
+              className="text-xs font-semibold px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-colors whitespace-nowrap shadow-xs"
+            >
+              Run Bot Now →
+            </Link>
+          </div>
+        )}
+
+        {profile && profile.skills && profile.skills.length > 0 && jobs.length > 0 && (
           <div className="bg-gradient-to-r from-indigo-50/80 via-emerald-50/50 to-white p-3.5 rounded-2xl border border-indigo-100 flex items-center justify-between gap-3 text-xs text-indigo-950">
             <div className="flex items-center gap-2.5">
               <Sparkles className="w-4 h-4 text-indigo-600 shrink-0" />
               <span>
-                Personalized AI Ranking active for <strong>{profile.full_name || 'Candidate'}</strong> — showing top matching positions for your skills and career domain.
+                Showing <strong>{jobs.length} positions</strong> discovered by your bot for <strong>{profile.full_name || 'Candidate'}</strong> — ordered by AI fit score.
               </span>
             </div>
-            <Link href="/resume" className="text-[11px] text-indigo-600 hover:underline font-semibold whitespace-nowrap">
-              Edit Skills
+            <Link href="/bot-controls" className="text-[11px] text-indigo-600 hover:underline font-semibold whitespace-nowrap">
+              Bot Controls
             </Link>
           </div>
         )}

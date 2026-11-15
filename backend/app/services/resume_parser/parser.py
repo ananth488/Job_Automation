@@ -380,34 +380,52 @@ class ResumeParser:
                     return clean[:80]
         return None
 
+    CATEGORY_HEADER_SUFFIXES = (
+        "skills", "competencies", "technologies", "tools", "systems", "languages",
+        "frameworks", "databases", "platforms", "proficiencies", "expertise", "knowledge",
+        "strengths", "abilities", "specializations", "specialties", "methodologies", "operations"
+    )
+
+    def _is_category_header(self, text: str) -> bool:
+        clean = text.strip().lower()
+        if clean in self.DISCARD_SUBSTRINGS:
+            return True
+        words = clean.split()
+        if len(words) <= 3 and words[-1] in self.CATEGORY_HEADER_SUFFIXES:
+            return True
+        return False
+
     def _clean_skill_token(self, token: str) -> str | None:
-        """Clean and normalize a raw candidate skill token extracted from text."""
+        """Clean and normalize a raw candidate skill token extracted dynamically from text."""
         t = token.strip()
-        t = re.sub(r"^[\s•\*\-▸▪–·✓✔o>\:\|\,\;\(\)\[\]]+", "", t)
-        t = re.sub(r"[\s\:\|\,\;\(\)\[\]]+$", "", t).strip()
+        t = re.sub(r"^[\s•\*\-▸▪–·✓✔o>\:\|\,\;\(\)\[\]\d\.\/\\]+", "", t)
+        t = re.sub(r"[\s\:\|\,\;\(\)\[\]\/\\]+$", "", t).strip()
         if not t:
             return None
         if "@" in t or "http" in t.lower() or "www." in t.lower():
             return None
         if len(t) < 2 or len(t) > 40:
             return None
-        # Discard if looks like a license ID / pure number / date string
-        if re.search(r"\b\d{4,}\b", t) or re.match(r"^[A-Z0-9_-]{8,}$", t):
+        # Discard pure numbers or strings with 5+ digits (e.g. phone/license IDs/pins)
+        if re.match(r"^[\d\s\-\/\.]+$", t) or re.search(r"\b\d{5,}\b", t):
             return None
-        # Discard if more than 4 words (likely a sentence fragment)
+        if re.search(r"\b\d{4}\s*[-–to]\s*\d{4}\b", t, re.IGNORECASE):
+            return None
+        # Discard if more than 4 words (likely a full sentence / narrative description)
         words = t.split()
         if len(words) > 4:
             return None
         low = t.lower()
-        if low in self.DISCARD_SUBSTRINGS or any(sub == low for sub in self.DISCARD_SUBSTRINGS):
+        if low in self.DISCARD_SUBSTRINGS or self._is_category_header(low):
             return None
         if any(stop in low for stop in [
             "responsible for", "years of", "experienced in", "knowledge of", "proficient in",
-            "good understanding", "hands on", "ability to", "curriculum", "resume", "page 1"
+            "good understanding", "hands on", "ability to", "curriculum", "resume", "page 1",
+            "duties include", "familiar with", "worked on", "handling", "worked with"
         ]):
             return None
 
-        # Standardize known acronyms
+        # Standardize known acronyms or hyphenated codes
         acronyms = {
             "icd-10": "ICD-10", "icd-10-cm": "ICD-10-CM", "icd-10-pcs": "ICD-10-PCS",
             "cpt": "CPT", "cpt-4": "CPT-4", "hcpcs": "HCPCS", "hipaa": "HIPAA",
@@ -421,22 +439,45 @@ class ResumeParser:
         }
         if low in acronyms:
             return acronyms[low]
+
+        # Preserve uppercase if token contains multiple capital letters or digits/hyphens
+        if re.search(r"[A-Z]{2,}", t) or re.search(r"[A-Z]+-\d+", t) or re.search(r"\b[A-Z]{1,3}\d+\b", t) or "." in t:
+            return t
+
         if t.islower():
             return t.title()
         return t
 
     def _extract_dynamic_skills(self, text: str) -> set[str]:
-        """Dynamically extract candidate skills from any resume layout and section headings."""
-        section_patterns = [
-            r"(?:CORE\s+COMPETENCIES\s*&?\s*SKILLS|CORE\s+COMPETENCIES|AREAS\s+OF\s+EXPERTISE|KEY\s+SKILLS|TECHNICAL\s+SKILLS|PROFESSIONAL\s+SKILLS|SKILLS\s*&?\s*ABILITIES|SKILLS\s+SUMMARY|DOMAIN\s+EXPERTISE|SPECIALIZATIONS|SKILLS|TECHNOLOGIES)\s*[:\n](.*?)(?=\n\s*(?:WORK\s+EXPERIENCE|PROFESSIONAL\s+EXPERIENCE|EXPERIENCE|EMPLOYMENT|EDUCATION|ACADEMIC|PROJECTS|KEY\s+PROJECTS|PUBLICATIONS|CERTIFICATIONS|AWARDS|LANGUAGES|DECLARATION|PERSONAL\s+DETAILS)|\Z)",
-            r"(?:CERTIFICATIONS?\s*&?\s*LICENSES?|CERTIFICATIONS?|CREDENTIALS?)\s*[:\n](.*?)(?=\n\s*(?:WORK\s+EXPERIENCE|PROFESSIONAL\s+EXPERIENCE|EXPERIENCE|EMPLOYMENT|EDUCATION|ACADEMIC|PROJECTS|SKILLS|LANGUAGES|DECLARATION)|\Z)",
-        ]
+        """Dynamically extract candidate skills from ANY resume layout, format, or career domain."""
+        section_regex = re.compile(
+            r"(?:^|\n)\s*(?:"
+            r"CORE\s+COMPETENCIES(?:\s*&?\s*SKILLS)?"
+            r"|AREAS\s+OF\s+(?:EXPERTISE|STRENGTH|SPECIALIZATION)"
+            r"|KEY\s+(?:COMPETENCIES|SKILLS|STRENGTHS)"
+            r"|CORE\s+SKILLS"
+            r"|TECHNICAL\s+(?:SKILLS|PROFICIENCIES|EXPERTISE|STRENGTHS|COMPETENCIES)"
+            r"|PROFESSIONAL\s+SKILLS"
+            r"|FUNCTIONAL\s+SKILLS"
+            r"|DOMAIN\s+(?:EXPERTISE|KNOWLEDGE)"
+            r"|TOOLS\s*(?:&|AND)\s*TECHNOLOGIES"
+            r"|TECHNOLOGIES\s*(?:&|AND)\s*TOOLS"
+            r"|SOFTWARE\s+(?:SKILLS|PROFICIENCY|TOOLS)"
+            r"|SPECIALIZATIONS?"
+            r"|SKILLS\s*(?:&|AND)\s*ABILITIES"
+            r"|SKILLS\s+SUMMARY"
+            r"|SKILLS"
+            r"|CERTIFICATIONS?(?:\s*&?\s*LICENSES?)?"
+            r")\s*[:\-\n](.*?)(?=(?:\n\s*(?:"
+            r"WORK\s+EXPERIENCE|PROFESSIONAL\s+EXPERIENCE|EMPLOYMENT|EXPERIENCE|WORK\s+HISTORY"
+            r"|EDUCATION|ACADEMIC|QUALIFICATIONS|PROJECTS|KEY\s+PROJECTS|PUBLICATIONS"
+            r"|AWARDS|ACHIEVEMENTS|LANGUAGES|DECLARATION|PERSONAL\s+DETAILS|REFERENCES"
+            r")\s*[:\-\n])|\Z)",
+            re.IGNORECASE | re.DOTALL,
+        )
         extracted: set[str] = set()
 
-        for pattern in section_patterns:
-            match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
-            if not match:
-                continue
+        for match in section_regex.finditer(text):
             sec_text = match.group(1).strip()
             lines = sec_text.split("\n")
             for line in lines:
@@ -444,36 +485,43 @@ class ResumeParser:
                 if not line_str:
                     continue
 
+                content = line_str
                 # Category headers e.g. "Medical Coding: ICD-10-CM, CPT"
                 if ":" in line_str:
                     parts = line_str.split(":", 1)
-                    left_cand = self._clean_skill_token(parts[0])
-                    if left_cand and left_cand.lower() not in self.DISCARD_SUBSTRINGS:
-                        extracted.add(left_cand)
+                    if not self._is_category_header(parts[0]):
+                        left_cand = self._clean_skill_token(parts[0])
+                        if left_cand:
+                            extracted.add(left_cand)
                     content = parts[1]
                 elif " - " in line_str and not line_str.startswith("-"):
                     parts = line_str.split(" - ", 1)
-                    left_cand = self._clean_skill_token(parts[0])
-                    if left_cand and left_cand.lower() not in self.DISCARD_SUBSTRINGS:
-                        extracted.add(left_cand)
+                    if not self._is_category_header(parts[0]):
+                        left_cand = self._clean_skill_token(parts[0])
+                        if left_cand:
+                            extracted.add(left_cand)
                     content = parts[1]
-                else:
-                    content = line_str
 
-                # Sub-skills in parentheses e.g. "Certified Professional Coder (CPC - AAPC)"
+                # Sub-skills in parentheses e.g. "Medical Coding (ICD-10-CM, ICD-10-PCS, CPT, HCPCS Level II)"
                 paren_matches = re.findall(r"\((.*?)\)", content)
                 for p in paren_matches:
-                    for sub in re.split(r"[,;\|/-]+", p):
+                    for sub in re.split(r"[,;\|/\&]+", p):
                         tok = self._clean_skill_token(sub)
                         if tok:
                             extracted.add(tok)
                 outer_content = re.sub(r"\(.*?\)", "", content)
 
-                tokens = re.split(r"[\,\;\|\•\*\▸\▪\–·]+", outer_content)
+                tokens = re.split(r"[\,\;\|\•\*\▸\▪\–·\t\n]+", outer_content)
                 for t in tokens:
-                    tok = self._clean_skill_token(t)
-                    if tok:
-                        extracted.add(tok)
+                    if " / " in t:
+                        for part in t.split(" / "):
+                            tok = self._clean_skill_token(part)
+                            if tok:
+                                extracted.add(tok)
+                    else:
+                        tok = self._clean_skill_token(t)
+                        if tok:
+                            extracted.add(tok)
 
         return extracted
 

@@ -33,8 +33,8 @@ def get_dashboard_stats(
     db: Session = Depends(get_db),
 ):
     """Fetch high-level KPI counters for current user."""
-    total_jobs = db.scalar(select(func.count(Job.id))) or 0
     total_matches = db.scalar(select(func.count(JobMatch.id)).where(JobMatch.user_id == current_user.id)) or 0
+    total_jobs = total_matches
     total_apps = db.scalar(select(func.count(Application.id)).where(Application.user_id == current_user.id)) or 0
     pending_approval = db.scalar(
         select(func.count(Application.id)).where(
@@ -67,11 +67,7 @@ def get_dashboard_stats(
     ) or 0.0
 
     today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-    new_jobs_today = db.scalar(
-        select(func.count(Job.id)).where(Job.scraped_at >= today)
-    ) or 0
-    if new_jobs_today == 0 and total_jobs > 0:
-        new_jobs_today = min(12, total_jobs)
+    new_jobs_today = total_matches if total_matches > 0 else 0
 
     apps_today = db.scalar(
         select(func.count(Application.id)).where(

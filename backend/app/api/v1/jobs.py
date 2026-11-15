@@ -22,7 +22,7 @@ router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 
 @router.get("/", response_model=JobListResponse)
-async def list_jobs(
+def list_jobs(
     platform: str | None = None,
     work_mode: str | None = None,
     search: str | None = None,
@@ -33,79 +33,28 @@ async def list_jobs(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """List jobs with optional platform, query, company type, and posted within days filters."""
-    # Check if candidate profile has skills and needs initial domain jobs
-    profile = db.scalar(select(CandidateProfile).where(CandidateProfile.user_id == current_user.id))
-    if profile and profile.skills:
-        has_matched_jobs = db.scalar(
-            select(func.count(JobMatch.id)).where(
-                (JobMatch.user_id == current_user.id) & (JobMatch.overall_score >= 60)
-            )
-        ) or 0
-        if has_matched_jobs == 0 and not search and not platform:
-            try:
-                from app.services.resume_parser.parser import ResumeParser
-                from app.platforms.naukri import NaukriAdapter
-                from app.platforms.indeed import IndeedAdapter
-                from app.services.matcher.matcher import match_job_to_profile
+    """List jobs discovered by the bot for the current user. Returns empty until candidate runs bot."""
+    # Check if the user has executed a bot run / has job matches
+    user_match_count = db.scalar(
+        select(func.count(JobMatch.id)).where(JobMatch.user_id == current_user.id)
+    ) or 0
 
-                p = ResumeParser()
-                domain = p.detect_domain(profile.skills, profile.summary or "")
-                n_ad = NaukriAdapter()
-                i_ad = IndeedAdapter()
+    if user_match_count == 0:
+        # Candidate has not run the bot yet. Do NOT show pre-fetched or arbitrary jobs.
+        return JobListResponse(
+            items=[],
+            total=0,
+            page=page,
+            size=size,
+            pages=0,
+        )
 
-                candidate_locs = [profile.location] if profile.location else None
-                n_jobs = await n_ad.search_jobs(
-                    keywords=profile.skills[:5],
-                    locations=candidate_locs,
-                    candidate_skills=profile.skills,
-                    limit=15,
-                    domain=domain,
-                )
-                i_jobs = await i_ad.search_jobs(
-                    keywords=profile.skills[:5],
-                    locations=candidate_locs,
-                    candidate_skills=profile.skills,
-                    limit=15,
-                    domain=domain,
-                )
-
-                pref = db.scalar(select(Preference).where(Preference.user_id == current_user.id))
-                for item in n_jobs + i_jobs:
-                    existing_job = db.scalar(
-                        select(Job).where(
-                            (Job.platform == item["platform"]) & (Job.external_job_id == item["external_job_id"])
-                        )
-                    )
-                    if not existing_job:
-                        job_obj = Job(**item)
-                        db.add(job_obj)
-                        db.commit()
-                        db.refresh(job_obj)
-                    else:
-                        job_obj = existing_job
-
-                    match_res = match_job_to_profile(job_obj, profile, pref)
-                    new_m = JobMatch(
-                        user_id=current_user.id,
-                        job_id=job_obj.id,
-                        overall_score=match_res.overall_score,
-                        skills_score=match_res.skills_score,
-                        experience_score=match_res.experience_score,
-                        location_score=match_res.location_score,
-                        salary_score=match_res.salary_score,
-                        role_fit_score=match_res.role_fit_score,
-                        matched_skills=match_res.matched_skills,
-                        missing_skills=match_res.missing_skills,
-                        explanation=match_res.explanation,
-                        status="shortlisted" if match_res.overall_score >= 60 else "rejected",
-                    )
-                    db.add(new_m)
-                db.commit()
-            except Exception as e:
-                print(f"[ON-DEMAND DOMAIN JOB SYNC] Error: {e}")
-
-    query = select(Job).where(Job.is_active == True)  # noqa: E712
+    # Base query: only jobs discovered/matched for this user
+    query = (
+        select(Job)
+        .join(JobMatch, (JobMatch.job_id == Job.id) & (JobMatch.user_id == current_user.id))
+        .where(Job.is_active == True)
+    )
 
     if platform:
         query = query.where(Job.platform == platform.lower())
@@ -138,17 +87,9 @@ async def list_jobs(
     # Count total
     total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
 
-    # Paginate and rank jobs by relevance to candidate, then by date
+    # Paginate and rank jobs by match score
     offset = (page - 1) * size
-    query = (
-        query.outerjoin(
-            JobMatch,
-            (JobMatch.job_id == Job.id) & (JobMatch.user_id == current_user.id),
-        )
-        .order_by(desc(JobMatch.overall_score).nullslast(), desc(Job.scraped_at))
-        .offset(offset)
-        .limit(size)
-    )
+    query = query.order_by(desc(JobMatch.overall_score), desc(Job.scraped_at)).offset(offset).limit(size)
     jobs = db.scalars(query).all()
 
     # Pre-fetch applied job IDs for current user
