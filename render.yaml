@@ -7,8 +7,10 @@ services:
     rootDir: backend
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
-    healthCheckPath: /api/v1/jobs
+    healthCheckPath: /health
     envVars:
+      - key: PYTHONPATH
+        value: .
       - key: DATABASE_URL
         sync: false
       - key: SECRET_KEY
@@ -19,3 +21,4 @@ services:
         value: ananthslvm28@gmail.com
       - key: DEFAULT_USER_PASSWORD
         value: password123
+

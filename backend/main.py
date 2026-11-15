@@ -225,3 +225,9 @@ def root():
         "version": "1.0.0",
         "docs": "/docs",
     }
+
+
+@app.get("/health")
+def health_check():
+    """Unauthenticated health check endpoint for cloud monitoring."""
+    return {"status": "ok", "service": "job-bot-backend"}
