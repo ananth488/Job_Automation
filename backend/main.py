@@ -80,6 +80,31 @@ COMPANY_CAREERS = {
     "Paytm": "https://paytm.com/careers",
     "Porter": "https://porter.in/careers",
     "BrowserStack": "https://www.browserstack.com/careers",
+    # Medical Coding & Healthcare
+    "Omega Healthcare": "https://www.omegahms.com/careers/",
+    "Episource": "https://www.episource.com/careers",
+    "Access Healthcare": "https://www.accesshealthcare.com/careers",
+    "AGS Health": "https://www.agshealth.com/careers",
+    "CorroHealth": "https://corrohealth.com/careers/",
+    "R1 RCM": "https://www.r1rcm.com/careers",
+    "Optum": "https://careers.unitedhealthgroup.com/",
+    "GeBBS Healthcare": "https://gebbs.com/careers/",
+    "Vee Technologies": "https://www.veetechnologies.com/careers/",
+    "Sagility Health": "https://sagilityhealth.com/careers/",
+    "Exela Technologies": "https://www.exelatech.com/careers",
+    "Visionary RCM": "https://corrohealth.com/careers/",
+    # Finance
+    "Deloitte": "https://www2.deloitte.com/ui/en/pages/careers/careers.html",
+    "EY": "https://www.ey.com/en_in/careers",
+    "PwC": "https://www.pwc.in/careers.html",
+    "KPMG": "https://home.kpmg/in/en/home/careers.html",
+    "Genpact": "https://www.genpact.com/careers",
+    "WNS": "https://www.wns.com/careers",
+    # HR
+    "Randstad": "https://www.randstad.in/jobs/",
+    "Adecco": "https://www.adecco.co.in/jobs/",
+    "Michael Page": "https://www.michaelpage.co.in/jobs",
+    "TeamLease": "https://www.teamlease.com/careers",
 }
 
 
@@ -97,33 +122,74 @@ def reset_database_fully():
 
 
 async def seed_initial_fresh_jobs():
-    """Seed 50 fresh live-compatible jobs (25 Naukri + 25 Indeed)."""
+    """Seed fresh live-compatible jobs across Medical Coding, Tech, Finance, and HR."""
     from app.platforms.naukri import NaukriAdapter
     from app.platforms.indeed import IndeedAdapter
 
     n_ad = NaukriAdapter()
     i_ad = IndeedAdapter()
 
-    n_jobs = await n_ad.search_jobs(
+    # 1. Medical Coding & Healthcare (20 jobs)
+    n_med = await n_ad.search_jobs(
+        keywords=["Medical Coder", "ICD-10", "CPT", "CPC"],
+        locations=["Chennai", "Bengaluru", "Hyderabad", "Coimbatore"],
+        limit=10,
+        domain="medical_coding",
+    )
+    i_med = await i_ad.search_jobs(
+        keywords=["Medical Coder", "Inpatient Coder", "RCM", "AAPC"],
+        locations=["Chennai", "Bengaluru", "Hyderabad", "Remote"],
+        limit=10,
+        domain="medical_coding",
+    )
+
+    # 2. Tech / Frontend & Full Stack (20 jobs)
+    n_tech = await n_ad.search_jobs(
         keywords=["Frontend Developer", "React", "TypeScript", "Next.js"],
         locations=["Chennai", "Bengaluru", "Hyderabad", "Remote"],
-        limit=25,
+        limit=10,
+        domain="frontend",
     )
-    i_jobs = await i_ad.search_jobs(
-        keywords=["Frontend Developer", "React", "TypeScript", "Next.js"],
-        locations=["Chennai", "Bengaluru", "Hyderabad", "Remote"],
-        limit=25,
+    i_tech = await i_ad.search_jobs(
+        keywords=["Full Stack Developer", "Python", "FastAPI", "React"],
+        locations=["Bengaluru", "Chennai", "Hyderabad", "Remote"],
+        limit=10,
+        domain="backend",
     )
+
+    # 3. Finance & HR (10 jobs)
+    n_fin = await n_ad.search_jobs(
+        keywords=["Senior Accountant", "Tally Prime", "GST"],
+        locations=["Chennai", "Bengaluru", "Mumbai"],
+        limit=5,
+        domain="finance",
+    )
+    i_hr = await i_ad.search_jobs(
+        keywords=["Talent Acquisition", "Technical Recruiter"],
+        locations=["Bengaluru", "Chennai", "Remote"],
+        limit=5,
+        domain="hr",
+    )
+
+    all_jobs = n_med + i_med + n_tech + i_tech + n_fin + i_hr
 
     db: Session = SessionLocal()
     try:
-        for item in n_jobs + i_jobs:
-            j = Job(**item)
-            db.add(j)
+        inserted = 0
+        for item in all_jobs:
+            existing = db.scalar(
+                select(Job).where(
+                    (Job.platform == item["platform"]) & (Job.external_job_id == item["external_job_id"])
+                )
+            )
+            if not existing:
+                j = Job(**item)
+                db.add(j)
+                inserted += 1
         db.commit()
-        print(f"[DATABASE RESET] Successfully seeded {len(n_jobs) + len(i_jobs)} fresh jobs into database.")
+        print(f"[MULTI-DOMAIN SEED] Seeded {inserted} new diverse multi-domain jobs into database.")
     except Exception as e:
-        print(f"[DATABASE RESET] Seed error: {e}")
+        print(f"[MULTI-DOMAIN SEED] Error: {e}")
         db.rollback()
     finally:
         db.close()

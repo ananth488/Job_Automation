@@ -75,7 +75,11 @@ async def run_job_search_cycle(user_id: int = 1) -> dict[str, Any]:
         threshold = pref.match_threshold if pref and pref.match_threshold else 75
         candidate_exp = int(profile.total_experience_years or 2) if profile else 2
 
-        # 2. Fetch jobs from platforms using candidate's skills and locations
+        # 2. Fetch jobs from platforms using candidate's skills, domain, and locations
+        from app.services.resume_parser.parser import ResumeParser
+        parser = ResumeParser()
+        domain = parser.detect_domain(candidate_skills, (profile.summary or "") if profile else "")
+
         found_jobs: list[dict[str, Any]] = []
         naukri_jobs = await naukri_adapter.search_jobs(
             keywords=search_keywords,
@@ -83,6 +87,7 @@ async def run_job_search_cycle(user_id: int = 1) -> dict[str, Any]:
             experience_min=candidate_exp,
             candidate_skills=candidate_skills,
             limit=25,
+            domain=domain,
         )
         indeed_jobs = await indeed_adapter.search_jobs(
             keywords=search_keywords,
@@ -90,6 +95,7 @@ async def run_job_search_cycle(user_id: int = 1) -> dict[str, Any]:
             experience_min=candidate_exp,
             candidate_skills=candidate_skills,
             limit=25,
+            domain=domain,
         )
         found_jobs.extend(naukri_jobs)
         found_jobs.extend(indeed_jobs)

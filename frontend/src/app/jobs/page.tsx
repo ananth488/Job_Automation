@@ -44,17 +44,18 @@ export default function JobsPage() {
   const [bulkApplying, setBulkApplying] = useState(false);
   const [bulkQueuing, setBulkQueuing] = useState(false);
   const [applyingJobId, setApplyingJobId] = useState<number | null>(null);
+  const [profile, setProfile] = useState<any>(null);
 
   useEffect(() => {
-    async function loadUserPreference() {
+    async function loadUserData() {
+      const token = localStorage.getItem('access_token');
+      if (!token) return;
       try {
-        const res = await fetch(`${API_BASE_URL}/preferences/`, {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`,
-          },
+        const prefRes = await fetch(`${API_BASE_URL}/preferences/`, {
+          headers: { Authorization: `Bearer ${token}` },
         });
-        if (res.ok) {
-          const data = await res.json();
+        if (prefRes.ok) {
+          const data = await prefRes.json();
           if (data && data.posted_within_days !== null && data.posted_within_days !== undefined) {
             setPostedWithin(String(data.posted_within_days));
           }
@@ -62,8 +63,20 @@ export default function JobsPage() {
       } catch {
         // Keep default 30
       }
+
+      try {
+        const profRes = await fetch(`${API_BASE_URL}/profile/`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (profRes.ok) {
+          const profData = await profRes.json();
+          setProfile(profData);
+        }
+      } catch {
+        // ignore
+      }
     }
-    loadUserPreference();
+    loadUserData();
   }, []);
 
   useEffect(() => {
@@ -262,6 +275,43 @@ export default function JobsPage() {
   return (
     <DashboardLayout title="Job Discovery & AI Matches">
       <div className="space-y-5">
+        {/* Domain Personalization & Onboarding Banner */}
+        {profile && (!profile.skills || profile.skills.length === 0) && (
+          <div className="bg-gradient-to-r from-amber-500/10 via-indigo-500/10 to-transparent p-4 rounded-2xl border border-amber-200/80 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">💼</span>
+              <div>
+                <p className="text-xs font-bold text-slate-900">
+                  Showing featured positions across Medical Coding, Healthcare, Tech, Finance & HR
+                </p>
+                <p className="text-[11px] text-slate-600 mt-0.5">
+                  Upload your master resume in <strong>Resume & Profile</strong> to automatically filter and AI-score jobs matching your career domain!
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/resume"
+              className="text-xs font-semibold px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-colors whitespace-nowrap shadow-xs"
+            >
+              Upload Resume →
+            </Link>
+          </div>
+        )}
+
+        {profile && profile.skills && profile.skills.length > 0 && (
+          <div className="bg-gradient-to-r from-indigo-50/80 via-emerald-50/50 to-white p-3.5 rounded-2xl border border-indigo-100 flex items-center justify-between gap-3 text-xs text-indigo-950">
+            <div className="flex items-center gap-2.5">
+              <Sparkles className="w-4 h-4 text-indigo-600 shrink-0" />
+              <span>
+                Personalized AI Ranking active for <strong>{profile.full_name || 'Candidate'}</strong> — showing top matching positions for your skills and career domain.
+              </span>
+            </div>
+            <Link href="/resume" className="text-[11px] text-indigo-600 hover:underline font-semibold whitespace-nowrap">
+              Edit Skills
+            </Link>
+          </div>
+        )}
+
         {/* Filter Toolbar */}
         <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-3 sm:space-y-0 sm:flex sm:items-center sm:gap-4">
           <div className="relative flex-1">

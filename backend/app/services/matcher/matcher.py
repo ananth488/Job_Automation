@@ -90,6 +90,7 @@ class JobMatcher:
         cleaned = s.lower().strip()
         cleaned = re.sub(r'[\s\-_.]+', '', cleaned)
         synonyms = {
+            # Tech
             "reactjs": "react",
             "react": "react",
             "nextjs": "nextjs",
@@ -110,6 +111,48 @@ class JobMatcher:
             "fastapi": "fastapi",
             "postgresql": "postgres",
             "postgres": "postgres",
+            # Medical Coding
+            "icd10cm": "icd10",
+            "icd10pcs": "icd10",
+            "icd10": "icd10",
+            "cpt4": "cpt",
+            "cpt": "cpt",
+            "hcpcslevelii": "hcpcs",
+            "hcpcs": "hcpcs",
+            "cpcaapc": "cpc",
+            "cpc": "cpc",
+            "ccsahima": "ccs",
+            "ccs": "ccs",
+            "revenuecyclemanagementrcm": "rcm",
+            "revenuecyclemanagement": "rcm",
+            "rcm": "rcm",
+            "medicalcoding": "medicalcoding",
+            "medicalbilling": "medicalbilling",
+            "epicsystems": "epic",
+            "epic": "epic",
+            "cerneremr": "cerner",
+            "cerner": "cerner",
+            "hipaa": "hipaa",
+            "hipaaguidelines": "hipaa",
+            # Finance
+            "tallyprime": "tally",
+            "tallyerp9": "tally",
+            "tallyerp": "tally",
+            "tally": "tally",
+            "gstfiling": "gst",
+            "gst": "gst",
+            "tdsreturn": "tds",
+            "tds": "tds",
+            "sapfico": "sapfico",
+            "sap": "sap",
+            "financialaccounting": "accounting",
+            "auditing": "audit",
+            "internalaudit": "audit",
+            # HR
+            "talentacquisition": "recruitment",
+            "technicalrecruitment": "recruitment",
+            "hrms": "hrms",
+            "hris": "hrms",
         }
         return synonyms.get(cleaned, cleaned)
 
@@ -211,19 +254,36 @@ class JobMatcher:
             return max(0, 100 - gap_pct * 2)
 
     def _score_role_fit(self, job: Job, preferences: Preference | None, profile: CandidateProfile | None = None) -> float:
-        """Score based on how well the job title matches desired roles or profile summary."""
-        target_roles = []
+        """Score based on how well the job title matches desired roles, past experience titles, or profile summary."""
+        target_roles: list[str] = []
         if preferences and preferences.desired_roles:
             target_roles.extend(preferences.desired_roles)
         elif preferences and preferences.keywords:
             target_roles.extend(preferences.keywords)
 
-        if not target_roles and profile:
+        if profile:
+            # Also extract target roles from candidate's past work experience titles
+            if profile.experience and isinstance(profile.experience, list):
+                for exp in profile.experience:
+                    if isinstance(exp, dict) and exp.get("title"):
+                        target_roles.append(exp["title"])
+
             summary = (profile.summary or "").lower()
-            if "frontend" in summary or "react" in summary:
-                target_roles = ["Frontend Developer", "React Developer", "Software Engineer", "Web Developer"]
+            skills_blob = " ".join(profile.skills or []).lower()
+
+            if any(k in summary or k in skills_blob for k in ["medical cod", "cpc", "icd-10", "cpt", "inpatient", "outpatient", "rcm"]):
+                target_roles.extend([
+                    "Medical Coder", "Senior Medical Coder", "Certified Professional Coder",
+                    "Inpatient Medical Coder", "Outpatient Coder", "CPC Coder", "Medical Billing Specialist"
+                ])
+            elif any(k in summary or k in skills_blob for k in ["accountant", "tally", "gst", "auditing", "taxation"]):
+                target_roles.extend(["Accountant", "Senior Accountant", "Financial Analyst", "Tax Associate", "Accounts Executive"])
+            elif any(k in summary or k in skills_blob for k in ["talent acquisition", "recruiter", "recruitment", "hr operations"]):
+                target_roles.extend(["Talent Acquisition Specialist", "Technical Recruiter", "HR Operations", "HR Generalist"])
+            elif "frontend" in summary or "react" in summary or "next.js" in summary:
+                target_roles.extend(["Frontend Developer", "React Developer", "Software Engineer", "Web Developer"])
             elif "full stack" in summary:
-                target_roles = ["Full Stack Developer", "Software Engineer"]
+                target_roles.extend(["Full Stack Developer", "Software Engineer"])
 
         if not target_roles:
             return 70.0

@@ -91,6 +91,82 @@ async def upload_resume(
         profile.total_experience_years = parsed_data["total_experience_years"]
     db.commit()
 
+    # Automatically ingest and score domain-tailored jobs for this candidate immediately
+    try:
+        from app.platforms.naukri import NaukriAdapter
+        from app.platforms.indeed import IndeedAdapter
+        from app.models.models import Job, JobMatch, Preference
+        from app.services.matcher.matcher import match_job_to_profile
+
+        domain = parser.detect_domain(profile.skills or [], raw_text)
+        n_ad = NaukriAdapter()
+        i_ad = IndeedAdapter()
+
+        candidate_locs = [profile.location] if profile.location else None
+        n_domain_jobs = await n_ad.search_jobs(
+            keywords=(profile.skills or [])[:5],
+            locations=candidate_locs,
+            candidate_skills=profile.skills or [],
+            limit=15,
+            domain=domain,
+        )
+        i_domain_jobs = await i_ad.search_jobs(
+            keywords=(profile.skills or [])[:5],
+            locations=candidate_locs,
+            candidate_skills=profile.skills or [],
+            limit=15,
+            domain=domain,
+        )
+
+        pref = db.scalar(select(Preference).where(Preference.user_id == current_user.id))
+
+        for item in n_domain_jobs + i_domain_jobs:
+            existing_job = db.scalar(
+                select(Job).where(
+                    (Job.platform == item["platform"]) & (Job.external_job_id == item["external_job_id"])
+                )
+            )
+            if not existing_job:
+                job_obj = Job(**item)
+                db.add(job_obj)
+                db.commit()
+                db.refresh(job_obj)
+            else:
+                job_obj = existing_job
+
+            # Score against candidate profile
+            match_res = match_job_to_profile(job_obj, profile, pref)
+            ex_match = db.scalar(
+                select(JobMatch).where(
+                    (JobMatch.user_id == current_user.id) & (JobMatch.job_id == job_obj.id)
+                )
+            )
+            if ex_match:
+                ex_match.overall_score = match_res.overall_score
+                ex_match.skills_score = match_res.skills_score
+                ex_match.matched_skills = match_res.matched_skills
+                ex_match.missing_skills = match_res.missing_skills
+                ex_match.explanation = match_res.explanation
+            else:
+                new_m = JobMatch(
+                    user_id=current_user.id,
+                    job_id=job_obj.id,
+                    overall_score=match_res.overall_score,
+                    skills_score=match_res.skills_score,
+                    experience_score=match_res.experience_score,
+                    location_score=match_res.location_score,
+                    salary_score=match_res.salary_score,
+                    role_fit_score=match_res.role_fit_score,
+                    matched_skills=match_res.matched_skills,
+                    missing_skills=match_res.missing_skills,
+                    explanation=match_res.explanation,
+                    status="shortlisted" if match_res.overall_score >= 60 else "rejected",
+                )
+                db.add(new_m)
+        db.commit()
+    except Exception as e:
+        print(f"[RESUME DOMAIN SYNC] Error ingesting domain jobs: {e}")
+
     return resume
 
 
