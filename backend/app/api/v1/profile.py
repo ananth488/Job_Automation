@@ -36,6 +36,39 @@ def get_profile(
         needs_commit = False
         from app.services.resume_parser.parser import ResumeParser
         parser = ResumeParser()
+
+        # Check if company names were duplicated due to historical parser bug
+        companies = [item.get("company") for item in profile.experience if isinstance(item, dict) and item.get("company")]
+        if len(companies) > 1 and len(set(companies)) == 1:
+            from app.models.models import Resume
+            import os
+            from pathlib import Path
+            from app.core.config import settings
+
+            latest_resume = db.scalar(
+                select(Resume).where(Resume.user_id == current_user.id).order_by(Resume.version.desc())
+            )
+            resume_path = None
+            if latest_resume and latest_resume.file_path and os.path.exists(latest_resume.file_path):
+                resume_path = latest_resume.file_path
+            else:
+                upload_dir = Path(settings.UPLOAD_DIR) / str(current_user.id)
+                if upload_dir.exists():
+                    pdfs = list(upload_dir.glob("*.pdf"))
+                    if pdfs:
+                        resume_path = str(pdfs[0])
+
+            if resume_path:
+                try:
+                    re_parsed = parser.parse(resume_path)
+                    if re_parsed.experience and len(re_parsed.experience) >= len(profile.experience):
+                        profile.experience = [exp.copy() if isinstance(exp, dict) else exp for exp in re_parsed.experience]
+                        needs_commit = True
+                        if re_parsed.skills and (not profile.skills or len(profile.skills) < len(re_parsed.skills)):
+                            profile.skills = re_parsed.skills
+                except Exception:
+                    pass
+
         for item in profile.experience:
             if isinstance(item, dict):
                 t = item.get("title", "") or ""
