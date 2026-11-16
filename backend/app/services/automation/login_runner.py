@@ -53,6 +53,7 @@ STEALTH_ARGS = [
     "--window-size=1280,850",
     "--no-default-browser-check",
     "--no-first-run",
+    "--new-window",
 ]
 
 
@@ -197,6 +198,7 @@ async def launch_login(
         logger.info("Navigating to %s...", dest_url)
         try:
             await page.goto(dest_url, timeout=30000, wait_until="domcontentloaded")
+            await page.bring_to_front()
         except Exception as e:
             logger.warning("Initial navigation note: %s", e)
         await asyncio.sleep(2.0)

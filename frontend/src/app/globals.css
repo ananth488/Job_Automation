@@ -56,3 +56,42 @@ input:disabled,
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+
+/* Sonner Toast Custom Styling: Fix close 'x' icon position inside the toast box on the right side */
+[data-sonner-toast] {
+  position: relative !important;
+  padding-right: 44px !important;
+}
+
+[data-sonner-toast] [data-close-button] {
+  position: absolute !important;
+  right: 12px !important;
+  left: auto !important;
+  top: 14px !important;
+  bottom: auto !important;
+  transform: none !important;
+  width: 22px !important;
+  height: 22px !important;
+  border-radius: 6px !important;
+  opacity: 0.75 !important;
+  background: rgba(15, 23, 42, 0.06) !important;
+  border: 1px solid rgba(15, 23, 42, 0.08) !important;
+  color: #475569 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  z-index: 50 !important;
+  transition: all 0.15s ease-in-out !important;
+}
+
+[data-sonner-toast] [data-close-button]:hover {
+  opacity: 1 !important;
+  background: rgba(15, 23, 42, 0.12) !important;
+  color: #0f172a !important;
+}
+
+[data-sonner-toast] [data-close-button] svg {
+  width: 13px !important;
+  height: 13px !important;
+}

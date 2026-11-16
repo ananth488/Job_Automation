@@ -167,9 +167,45 @@ export default function BotControlsPage() {
     }
 
     const platformName = platform === 'indeed' ? 'Indeed' : 'Naukri';
+    const targetLoginUrl = platform === 'indeed'
+      ? 'https://in.indeed.com/account/login'
+      : 'https://www.naukri.com/nlogin/login';
+
+    // 1. Immediately launch official login window directly in candidate's browser
+    try {
+      const loginPopup = window.open(
+        targetLoginUrl,
+        `PortalLogin_${platform}`,
+        'width=960,height=750,left=180,top=90,menubar=no,status=no,toolbar=no,scrollbars=yes,resizable=yes'
+      );
+      if (!loginPopup || loginPopup.closed || typeof loginPopup.closed === 'undefined') {
+        window.open(targetLoginUrl, '_blank');
+      }
+    } catch {
+      window.open(targetLoginUrl, '_blank');
+    }
+
+    // Automatically expand confirmation input so candidate can save their email right after signing in
+    setEditingPlatformEmail(platform);
+    if (!customEmailInput) {
+      try {
+        const u = localStorage.getItem('user');
+        if (u) {
+          const parsed = JSON.parse(u);
+          if (parsed.email) setCustomEmailInput(parsed.email);
+        }
+      } catch {
+        // ignore
+      }
+    }
+
     setConnectingPlatform(platform);
-    toast.info(`Launching secure local Chrome window for ${platformName} login...`, { duration: 5000 });
-    setLogs((prev) => [...prev, `[BROWSER] Launching dedicated Chrome window for ${platformName} authentication...`]);
+    toast.info(`${platformName} login window opened! Please sign in and confirm your email below.`, { duration: 6000 });
+    setLogs((prev) => [
+      ...prev,
+      `[BROWSER] Opening official ${platformName} login window (${targetLoginUrl})...`,
+      `[INFO] Please sign in to ${platformName} in the opened window, then verify your account email below.`
+    ]);
 
     try {
       const res = await fetch(`${API_BASE_URL}/browser/open-login?platform=${platform}`, {
@@ -178,8 +214,7 @@ export default function BotControlsPage() {
       });
       if (res.ok) {
         const data = await res.json();
-        toast.info(data.message || `Opening ${platformName} login window on your desktop...`, { duration: 6000 });
-        setLogs((prev) => [...prev, `[BROWSER] ${data.message || `Opening ${platformName} login window...`}`]);
+        setLogs((prev) => [...prev, `[BROWSER] ${data.message || `Local ${platformName} engine active.`}`]);
 
         // Poll session-status every 3 seconds to auto-detect when candidate completes login
         const pollTimer = setInterval(async () => {
@@ -192,12 +227,13 @@ export default function BotControlsPage() {
               const pStatus = platform === 'indeed' ? sData.indeed : sData.naukri;
               if (pStatus && pStatus.logged_in) {
                 if (platform === 'indeed') {
-                  setIndeedSession({ logged_in: true, status: 'active' });
+                  setIndeedSession({ logged_in: true, status: 'active', email: pStatus.email });
                 } else {
-                  setNaukriSession({ logged_in: true, status: 'active' });
+                  setNaukriSession({ logged_in: true, status: 'active', email: pStatus.email });
                 }
                 toast.success(`${platformName} session connected successfully! Cookies saved securely.`);
                 setLogs((prev) => [...prev, `[SUCCESS] ${platformName} session active and armed for direct apply.`]);
+                setEditingPlatformEmail(null);
                 clearInterval(pollTimer);
               }
             }
@@ -207,13 +243,9 @@ export default function BotControlsPage() {
         }, 3000);
 
         setTimeout(() => clearInterval(pollTimer), 180000);
-      } else {
-        const err = await res.json().catch(() => ({}));
-        toast.error(err.detail || `Failed to launch browser for ${platformName}`);
-        setLogs((prev) => [...prev, `[ERROR] ${err.detail || `Failed to launch browser for ${platformName}`}`]);
       }
     } catch {
-      toast.error('Error connecting to local browser engine');
+      // Local helper optional
     } finally {
       setConnectingPlatform(null);
       fetchBotState();
