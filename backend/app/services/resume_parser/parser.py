@@ -670,6 +670,118 @@ class ResumeParser:
                         return p[:80]
         return None
 
+    COMPANY_KEYWORDS = {
+        "pvt", "ltd", "private limited", "limited", "inc", "inc.", "corp", "corporation",
+        "co.", "llc", "llp", "technologies", "technology", "solutions", "services",
+        "software", "systems", "system", "labs", "studio", "hospital", "healthcare",
+        "health", "clinic", "medical center", "foundation", "university", "college",
+        "school", "bank", "consulting", "enterprises", "holdings", "group", "media",
+        "digital", "works", "agency", "pharmacy", "diagnostics", "constructions",
+        "builders", "industries", "infotech", "associates", "global"
+    }
+
+    TITLE_KEYWORDS = {
+        "developer", "engineer", "programmer", "architect", "lead", "designer", "qa",
+        "tester", "analyst", "devops", "administrator", "scrum master", "manager",
+        "executive", "associate", "consultant", "officer", "director", "coordinator",
+        "assistant", "intern", "trainee", "representative", "specialist", "head", "vp",
+        "accountant", "auditor", "clerk", "operator", "technician", "coder", "biller",
+        "nurse", "doctor", "physician", "surveyor", "draftsman", "frontend", "front end",
+        "backend", "back end", "fullstack", "full stack", "physiotherapist", "pharmacist",
+        "counselor", "worker"
+    }
+
+    LOCATION_KEYWORDS = {
+        "chennai", "bangalore", "bengaluru", "hyderabad", "pune", "mumbai", "delhi",
+        "noida", "gurgaon", "gurugram", "kolkata", "coimbatore", "kochi", "trivandrum",
+        "ahmedabad", "jaipur", "chandigarh", "india", "remote", "hybrid", "onsite",
+        "usa", "uk", "london", "singapore", "dubai", "california", "texas", "new york"
+    }
+
+    def _score_company(self, s: str) -> int:
+        sl = s.lower().strip()
+        score = 0
+        for kw in self.COMPANY_KEYWORDS:
+            if re.search(r"\b" + re.escape(kw) + r"\b", sl):
+                score += 3
+        return score
+
+    def _score_title(self, s: str) -> int:
+        sl = s.lower().strip()
+        score = 0
+        for kw in self.TITLE_KEYWORDS:
+            if re.search(r"\b" + re.escape(kw) + r"\b", sl):
+                score += 3
+        return score
+
+    def _score_location(self, s: str) -> int:
+        sl = s.lower().strip()
+        for kw in self.LOCATION_KEYWORDS:
+            if re.search(r"\b" + re.escape(kw) + r"\b", sl):
+                return 3
+        if "," in s and len(s.split()) <= 4:
+            return 2
+        return 0
+
+    def _classify_experience_header(self, candidate_lines: list[str]) -> tuple[str, str, str]:
+        """Intelligently distinguish Job Title, Company Name, and Location without swapping."""
+        tokens = []
+        for line in candidate_lines:
+            line_clean = line.strip()
+            if not line_clean:
+                continue
+            # Split on pipe, or ' at '
+            parts = re.split(r"\s*\|\s*|\s+at\s+", line_clean)
+            for p in parts:
+                p_strip = p.strip(" \t,-")
+                if p_strip and len(p_strip) > 1:
+                    tokens.append(p_strip)
+
+        title = ""
+        company = ""
+        location = ""
+
+        # First pass: identify strong matches
+        remaining = []
+        for tok in tokens:
+            c_sc = self._score_company(tok)
+            t_sc = self._score_title(tok)
+            l_sc = self._score_location(tok)
+
+            if l_sc >= 3 and not location and c_sc == 0 and t_sc == 0:
+                location = tok
+            elif c_sc > t_sc and not company:
+                company = tok
+            elif t_sc > c_sc and not title:
+                title = tok
+            else:
+                remaining.append(tok)
+
+        # Second pass: assign remaining tokens
+        for tok in remaining:
+            l_sc = self._score_location(tok)
+            c_sc = self._score_company(tok)
+            t_sc = self._score_title(tok)
+
+            if not location and (l_sc > 0 or len(tok.split()) <= 2):
+                location = tok
+            elif not company and c_sc >= t_sc:
+                company = tok
+            elif not title and t_sc >= c_sc:
+                title = tok
+            elif not company:
+                company = tok
+            elif not title:
+                title = tok
+
+        # Post-check swap
+        if self._score_company(title) > self._score_company(company) and self._score_title(company) > self._score_title(title):
+            title, company = company, title
+        elif self._score_company(title) > 0 and self._score_company(company) == 0 and self._score_title(title) == 0:
+            company, title = title, company
+
+        return title, company, location
+
     def _extract_experience(self, text: str) -> list[dict[str, Any]]:
         """Extract work experience entries supporting multi-line formats and standard date ranges."""
         experiences: list[dict[str, Any]] = []
@@ -698,44 +810,49 @@ class ResumeParser:
             for idx, (line_idx, match) in enumerate(date_matches):
                 start_date = match.group(1).strip()
                 end_date = match.group(2).strip()
+                matched_line = lines[line_idx]
 
-                title = ""
-                company = ""
+                # Collect candidate lines around the date
+                candidate_lines = []
 
-                # Look at previous lines (within 3 lines)
+                # Text on the same line before or after the date (if any)
+                same_line_pre = matched_line[:match.start()].strip(" |–-")
+                if same_line_pre and len(same_line_pre) > 2 and not same_line_pre.startswith(("▸", "•", "-", "*")):
+                    candidate_lines.append(same_line_pre)
+
+                same_line_post = matched_line[match.end():].strip(" |–-")
+                if same_line_post and len(same_line_post) > 2 and not same_line_post.startswith(("▸", "•", "-", "*")):
+                    candidate_lines.append(same_line_post)
+
+                # Previous lines within 3 lines
                 prev_lines = [
                     lines[j]
                     for j in range(max(0, line_idx - 3), line_idx)
                     if lines[j] and not lines[j].startswith(("▸", "•", "-", "*"))
                 ]
-                # Look at next lines (within 3 lines)
+                candidate_lines.extend(prev_lines)
+
+                # Next lines within 2 lines (before bullets)
                 next_lines = [
                     lines[j]
-                    for j in range(line_idx + 1, min(len(lines), line_idx + 4))
+                    for j in range(line_idx + 1, min(len(lines), line_idx + 3))
                     if lines[j] and not lines[j].startswith(("▸", "•", "-", "*"))
                 ]
+                candidate_lines.extend(next_lines)
 
-                if prev_lines and next_lines:
-                    title = prev_lines[-1]
-                    company = next_lines[0]
-                elif prev_lines:
-                    if len(prev_lines) >= 2:
-                        company = prev_lines[-2]
-                        title = prev_lines[-1]
-                    else:
-                        title = prev_lines[-1]
-                elif next_lines:
-                    title = next_lines[0]
-                    if len(next_lines) >= 2:
-                        company = next_lines[1]
+                title, company, location = self._classify_experience_header(candidate_lines)
 
                 # Extract bullet descriptions up to the next experience item
                 bullets: list[str] = []
                 next_limit = date_matches[idx + 1][0] if idx + 1 < len(date_matches) else len(lines)
                 for j in range(line_idx + 1, next_limit):
                     l = lines[j]
-                    if l == company or l == title:
+                    if l in candidate_lines or l == company or l == title:
                         continue
+                    # If line is close to next date and is likely a company/title header of next job, stop bullets
+                    if idx + 1 < len(date_matches) and (next_limit - j) <= 3:
+                        if self._score_company(l) > 0 or self._score_title(l) > 0:
+                            break
                     if l.startswith(("▸", "•", "-", "*")):
                         cleaned = re.sub(r"^[▸•\-\*]\s*", "", l)
                         if cleaned:
@@ -745,14 +862,6 @@ class ResumeParser:
                         bullets[-1] += " " + l
                     elif l and not any(kw in l.lower() for kw in ["project", "education"]):
                         bullets.append(l)
-
-                # Clean up company if it contains pipe or comma for location
-                location = ""
-                if "|" in company:
-                    parts = [p.strip() for p in company.split("|")]
-                    company = parts[0]
-                    if len(parts) > 1:
-                        location = parts[1]
 
                 if title or company:
                     experiences.append(
@@ -774,10 +883,14 @@ class ResumeParser:
                 re.IGNORECASE | re.MULTILINE,
             )
             for match in exp_pattern.finditer(text):
+                part1 = match.group(1).strip()
+                part2 = match.group(2).strip()
+                title, company, location = self._classify_experience_header([part1, part2])
                 experiences.append(
                     {
-                        "company": match.group(1).strip()[:100],
-                        "title": match.group(2).strip()[:100],
+                        "title": title[:100],
+                        "company": company[:100],
+                        "location": location[:60],
                         "start": match.group(3).strip(),
                         "end": match.group(4).strip(),
                         "description": "",

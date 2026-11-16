@@ -18,7 +18,7 @@ def get_profile(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Retrieve verified candidate profile for current user."""
+    """Retrieve verified candidate profile for current user with smart experience sanitization."""
     profile = db.scalar(select(CandidateProfile).where(CandidateProfile.user_id == current_user.id))
     if not profile:
         profile = CandidateProfile(
@@ -29,6 +29,33 @@ def get_profile(
         db.add(profile)
         db.commit()
         db.refresh(profile)
+
+    # Auto-sanitize any historical work experiences where company and title were swapped or merged
+    if profile.experience and isinstance(profile.experience, list):
+        sanitized_exp = []
+        needs_commit = False
+        from app.services.resume_parser.parser import ResumeParser
+        parser = ResumeParser()
+        for item in profile.experience:
+            if isinstance(item, dict):
+                t = item.get("title", "") or ""
+                c = item.get("company", "") or ""
+                loc = item.get("location", "") or ""
+                if "|" in t or (parser._score_company(t) > 0 and not c) or (parser._score_company(t) > parser._score_title(t) and parser._score_title(c) > 0):
+                    new_t, new_c, new_loc = parser._classify_experience_header([t, c] if c else [t])
+                    item = {
+                        **item,
+                        "title": new_t or t,
+                        "company": new_c or c,
+                        "location": new_loc or loc,
+                    }
+                    needs_commit = True
+            sanitized_exp.append(item)
+        if needs_commit:
+            profile.experience = sanitized_exp
+            db.commit()
+            db.refresh(profile)
+
     return profile
 
 
