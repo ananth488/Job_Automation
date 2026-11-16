@@ -224,10 +224,29 @@ class IndeedAdapter(PlatformAdapter):
                 "Swiggy": "https://careers.swiggy.com/",
                 "Razorpay": "https://razorpay.com/jobs/",
                 "Urban Company": "https://careers.urbancompany.com/",
+                "Zerodha": "https://zerodha.com/careers",
+                "Ather Energy": "https://careers.atherenergy.com/",
+                "CRED": "https://cred.club/careers",
+                "Juspay": "https://juspay.in/careers",
+                "Groww": "https://groww.in/careers",
+                "Zepto": "https://www.zeptonow.com/careers",
+                "CoinSwitch": "https://coinswitch.co/careers",
+                "Pine Labs": "https://www.pinelabs.com/careers",
+                "Postman": "https://www.postman.com/careers/",
+                "Jupiter Money": "https://jupiter.money/careers/",
+                "Smallcase": "https://smallcase.hire.trakstar.com/",
+                "InVideo": "https://invideo.io/careers/",
+                "Rapido": "https://www.rapido.bike/careers",
+                "Spinny": "https://www.spinny.com/careers/",
+                "Classplus": "https://classplus.hire.trakstar.com/",
+                "Plum Insurance": "https://www.plumhq.com/careers",
+                "Jar App": "https://www.myjar.app/careers",
+                "Pocket FM": "https://pocketfm.com/careers",
             }
             if comp in company_portal_links:
                 apply_type = "company_portal"
                 company_url = company_portal_links[comp]
+                direct_indeed_url = company_url
             else:
                 apply_type = "direct_1click"
                 company_url = None

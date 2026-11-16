@@ -199,7 +199,6 @@ class NaukriAdapter(PlatformAdapter):
             clean_loc = re.sub(r"[^a-zA-Z0-9\s]", "", job_loc.split(",")[0]).strip().replace(" ", "-").lower()
 
             clean_comp_slug = re.sub(r"[^a-zA-Z0-9\s]", "", comp).strip().replace(" ", "-").lower()
-            direct_job_url = f"https://www.naukri.com/{clean_comp_slug}-jobs"
 
             # Classify apply type: Accurate company career portal links
             company_portal_links = {
@@ -238,13 +237,32 @@ class NaukriAdapter(PlatformAdapter):
                 "Yellow.ai": "https://yellow.ai/careers/",
                 "Impiger Technologies": "https://www.impigertech.com/careers/",
                 "Spritle Software": "https://www.spritle.com/careers",
+                "Kissflow": "https://kissflow.com/careers/",
+                "Chargebee": "https://www.chargebee.com/careers/",
+                "Ideas2IT Technologies": "https://www.ideas2it.com/careers",
+                "Facilio": "https://facilio.com/careers/",
+                "Hippo Video": "https://www.hippovideo.io/careers.html",
+                "Gofrugal Technologies": "https://www.gofrugal.com/careers",
+                "Contus": "https://www.contus.com/careers.php",
+                "AppviewX": "https://www.appviewx.com/careers/",
+                "Skcript Technologies": "https://skcript.com/careers/",
+                "Syncfusion": "https://www.syncfusion.com/company/careers",
+                "Hasura": "https://hasura.io/careers/",
+                "Keka HR": "https://www.keka.com/careers",
+                "Darwinbox": "https://darwinbox.com/careers",
+                "Mad Street Den (Vue.ai)": "https://www.madstreetden.com/careers/",
+                "Indium Software": "https://www.indiumsoftware.com/careers/",
+                "Hakuna Matata Solutions": "https://www.hakunamatatatech.com/careers/",
+                "LatentView Analytics": "https://www.latentview.com/careers/",
             }
             if comp in company_portal_links:
                 apply_type = "company_portal"
                 company_url = company_portal_links[comp]
+                direct_job_url = company_url
             else:
                 apply_type = "direct_1click"
                 company_url = None
+                direct_job_url = f"https://www.naukri.com/job-listings-{clean_title}-{clean_comp_slug}-{clean_loc}-{exp_low}-to-{exp_high}-years-{120326000000 + i}?src=directSearch"
 
             # Distribute job freshness across the last 30 days
             days_ago = (i * 2) % 28

@@ -178,11 +178,12 @@ export default function JobsPage() {
     if (!token) return;
 
     const platformName = job.platform === 'indeed' ? 'Indeed' : 'Naukri';
+    const targetUrl = job.company_url || job.url;
     setApplyingJobId(job.id);
-    toast.info(`Opening ${platformName} portal and submitting application...`, { duration: 4000 });
+    toast.info(`Opening ${job.company} portal and submitting application...`, { duration: 4000 });
 
-    // 1. Immediately open job posting in browser so user sees the post
-    window.open(job.url, '_blank');
+    // 1. Immediately open official company careers / job posting in browser
+    window.open(targetUrl, '_blank');
 
     try {
       const res = await fetch(`${API_BASE_URL}/browser/open-portal-apply`, {
@@ -194,7 +195,7 @@ export default function JobsPage() {
         body: JSON.stringify({
           job_id: job.id,
           platform: job.platform,
-          url: job.url,
+          url: targetUrl,
         }),
       });
 

@@ -262,32 +262,15 @@ async def open_portal_apply(
     platform_clean = (request.platform or job.platform or "naukri").lower().strip()
 
     # Determine accurate target URL:
-    # 1. If it's a company portal job, direct to the official company career website
-    if job.apply_type == "company_portal" and job.company_url:
+    # 1. If company careers portal URL is present, ALWAYS prioritize official company website
+    if job.company_url and job.company_url.startswith("http"):
         target_url = job.company_url
-    elif request.url and request.url.startswith("http"):
+    elif request.url and request.url.startswith("http") and "-jobs" not in request.url and "jobs?q=" not in request.url:
         target_url = request.url
-    elif job.url and job.url.startswith("http") and "jobs?q=" not in job.url and "-jobs" not in job.url:
+    elif job.url and job.url.startswith("http") and "-jobs" not in job.url and "jobs?q=" not in job.url:
         target_url = job.url
     else:
-        # Fallback to targeted search for the specific company and role
-        import re
-        import urllib.parse
-
-        clean_loc = re.sub(r"[^a-zA-Z0-9\s]", "", (job.location or "India").split(",")[0].strip()).replace(" ", "+")
-        comp_clean = re.sub(r"[^a-zA-Z0-9\s]", "", job.company).strip()
-        comp_slug = comp_clean.replace(" ", "-").lower()
-
-        if platform_clean == "indeed":
-            q_enc = urllib.parse.quote_plus(f"{job.company} {job.title}")
-            target_url = f"https://in.indeed.com/jobs?q={q_enc}&l={clean_loc}"
-        else:
-            if comp_slug:
-                target_url = f"https://www.naukri.com/{comp_slug}-jobs"
-            elif job.url:
-                target_url = job.url
-            else:
-                target_url = "https://www.naukri.com/front-end-developer-jobs"
+        target_url = job.company_url or job.url or "https://www.naukri.com"
 
     # Pre-emptively terminate any previous runner process to avoid profile directory lock collision
     if sys.platform == "win32":

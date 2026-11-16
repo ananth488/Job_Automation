@@ -64,10 +64,11 @@ function JobDetailContent() {
   const handleApplyOnPortal = async () => {
     if (!job) return;
     const token = localStorage.getItem('access_token');
+    const targetUrl = job.company_url || job.url;
     setOpeningPortal(true);
 
-    // 1. Immediately open job posting in browser
-    window.open(job.url, '_blank');
+    // 1. Immediately open official company careers / job posting in browser
+    window.open(targetUrl, '_blank');
 
     try {
       const res = await fetch(`${API_BASE_URL}/browser/open-portal-apply`, {
@@ -79,7 +80,7 @@ function JobDetailContent() {
         body: JSON.stringify({
           job_id: job.id,
           platform: job.platform,
-          url: job.url,
+          url: targetUrl,
         }),
       });
 

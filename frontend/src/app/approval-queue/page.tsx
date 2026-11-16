@@ -336,10 +336,17 @@ export default function ApprovalQueuePage() {
   const handlePortalSubmit = async (item: any) => {
     const token = localStorage.getItem('access_token');
     const platformName = item.platform === 'indeed' ? 'Indeed' : 'Naukri';
-    toast.info(`Opening ${platformName} portal and registering application...`, { duration: 4000 });
+    const targetUrl = item.company_url || item.url;
+    toast.info(`Opening ${item.company} and registering application...`, { duration: 4000 });
 
-    // 1. Immediately open job posting in browser so user sees the post
-    window.open(item.url, '_blank');
+    // 1. Immediately open the actual careers / job posting in browser
+    window.open(targetUrl, '_blank');
+
+    try {
+      // Copy summary to clipboard so candidate can paste into portal if prompted
+      const text = `Candidate: Ananth P\nRole: ${item.job_title}\nCompany: ${item.company}\nNotice Period: 30 Days\nLocation: ${item.location}\nKey Matched Skills: ${(item.matched_skills || []).join(', ')}\n\nProfessional Summary:\n${item.tailored_summary || ''}\n\nCover Letter:\n${item.cover_letter || ''}`;
+      await navigator.clipboard.writeText(text);
+    } catch {}
 
     try {
       // 2. Mark as officially applied in backend database
@@ -360,7 +367,7 @@ export default function ApprovalQueuePage() {
         body: JSON.stringify({
           job_id: item.job_id,
           platform: item.platform,
-          url: item.url,
+          url: targetUrl,
         }),
       }).catch(() => {});
 
