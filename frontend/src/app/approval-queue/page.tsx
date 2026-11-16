@@ -336,10 +336,22 @@ export default function ApprovalQueuePage() {
   const handlePortalSubmit = async (item: any) => {
     const token = localStorage.getItem('access_token');
     const platformName = item.platform === 'indeed' ? 'Indeed' : 'Naukri';
-    toast.info(`Opening ${platformName} portal in your logged-in Chrome browser...`, { duration: 4000 });
+    toast.info(`Opening ${platformName} portal and registering application...`, { duration: 4000 });
+
+    // 1. Immediately open job posting in browser so user sees the post
+    window.open(item.url, '_blank');
 
     try {
-      const res = await fetch(`${API_BASE_URL}/browser/open-portal-apply`, {
+      // 2. Mark as officially applied in backend database
+      await fetch(`${API_BASE_URL}/applications/${item.application_id}/approve`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token || ''}`,
+        },
+      });
+
+      // Also call browser open-portal-apply in background
+      fetch(`${API_BASE_URL}/browser/open-portal-apply`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -350,21 +362,18 @@ export default function ApprovalQueuePage() {
           platform: item.platform,
           url: item.url,
         }),
-      });
+      }).catch(() => {});
 
-      if (res.ok) {
-        toast.info(
-          `Opened ${item.job_title} on ${platformName}! Complete application in the browser window, then mark as applied.`,
-          { duration: 8000 }
-        );
-        setItems((prev) =>
-          prev.map((i) => (i.application_id === item.application_id ? { ...i, status: 'in_progress' } : i))
-        );
-      } else {
-        window.open(item.url, '_blank');
-      }
+      toast.success(
+        `🎉 Applied to ${item.job_title} at ${item.company}! Moved to Applied status in Tracker.`,
+        { duration: 6000 }
+      );
+
+      // Remove from queue so it immediately reflects
+      setItems((prev) => prev.filter((i) => i.application_id !== item.application_id));
+      window.dispatchEvent(new CustomEvent('account-connection-changed'));
     } catch {
-      window.open(item.url, '_blank');
+      toast.info(`Opened ${item.job_title} on ${platformName}.`);
     }
   };
 

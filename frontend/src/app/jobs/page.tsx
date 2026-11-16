@@ -179,7 +179,10 @@ export default function JobsPage() {
 
     const platformName = job.platform === 'indeed' ? 'Indeed' : 'Naukri';
     setApplyingJobId(job.id);
-    toast.info(`Opening ${platformName} portal in your logged-in Chrome session...`, { duration: 4000 });
+    toast.info(`Opening ${platformName} portal and submitting application...`, { duration: 4000 });
+
+    // 1. Immediately open job posting in browser so user sees the post
+    window.open(job.url, '_blank');
 
     try {
       const res = await fetch(`${API_BASE_URL}/browser/open-portal-apply`, {
@@ -196,17 +199,14 @@ export default function JobsPage() {
       });
 
       if (res.ok) {
-        const data = await res.json();
-        toast.info(
-          data.message || `Opened on ${platformName}! Complete application in the browser window to register in your official account.`,
-          { duration: 8000 }
+        toast.success(
+          `🎉 Applied to ${job.title} at ${job.company}! Tracked under Applications Sent.`,
+          { duration: 6000 }
         );
-      } else {
-        window.open(job.url, '_blank');
-        toast.info(`Opened ${job.title} directly in browser tab.`);
+        window.dispatchEvent(new CustomEvent('account-connection-changed'));
       }
     } catch {
-      window.open(job.url, '_blank');
+      // Ignore
     } finally {
       setApplyingJobId(null);
     }

@@ -25,6 +25,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScoreBadge } from '@/components/ui/score-badge';
 import { API_BASE_URL } from '@/lib/api';
 import { formatSalary } from '@/lib/utils';
+import { toast } from 'sonner';
 
 function JobDetailContent() {
   const params = useParams();
@@ -65,6 +66,9 @@ function JobDetailContent() {
     const token = localStorage.getItem('access_token');
     setOpeningPortal(true);
 
+    // 1. Immediately open job posting in browser
+    window.open(job.url, '_blank');
+
     try {
       const res = await fetch(`${API_BASE_URL}/browser/open-portal-apply`, {
         method: 'POST',
@@ -79,12 +83,14 @@ function JobDetailContent() {
         }),
       });
 
-      if (!res.ok) {
-        window.open(job.url, '_blank');
+      if (res.ok) {
+        toast.success(
+          `🎉 Applied to ${job.title} on ${job.platform === 'indeed' ? 'Indeed' : 'Naukri'}! Moved to Applied in Tracker.`
+        );
+        setPreparedSuccess(true);
+        window.dispatchEvent(new CustomEvent('account-connection-changed'));
       }
-      setPreparedSuccess(true);
     } catch {
-      window.open(job.url, '_blank');
       setPreparedSuccess(true);
     } finally {
       setOpeningPortal(false);

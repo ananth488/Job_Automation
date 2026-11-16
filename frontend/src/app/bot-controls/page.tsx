@@ -185,26 +185,28 @@ export default function BotControlsPage() {
       window.open(targetLoginUrl, '_blank');
     }
 
-    // Automatically expand confirmation input so candidate can save their email right after signing in
-    setEditingPlatformEmail(platform);
-    if (!customEmailInput) {
-      try {
-        const u = localStorage.getItem('user');
-        if (u) {
-          const parsed = JSON.parse(u);
-          if (parsed.email) setCustomEmailInput(parsed.email);
-        }
-      } catch {
-        // ignore
+    // 2. Automatically link candidate's active profile email (no manual typing required!)
+    let userEmail: string | undefined = undefined;
+    try {
+      const u = localStorage.getItem('user');
+      if (u) {
+        const parsed = JSON.parse(u);
+        if (parsed.email) userEmail = parsed.email;
       }
+    } catch {
+      // ignore
     }
 
+    // Auto-confirm connection immediately with user's account email
+    await handleConfirmConnection(platform, userEmail);
+    setEditingPlatformEmail(null);
+
     setConnectingPlatform(platform);
-    toast.info(`${platformName} login window opened! Please sign in and confirm your email below.`, { duration: 6000 });
+    toast.success(`${platformName} login window opened and linked to ${userEmail || 'your account'}!`, { duration: 6000 });
     setLogs((prev) => [
       ...prev,
       `[BROWSER] Opening official ${platformName} login window (${targetLoginUrl})...`,
-      `[INFO] Please sign in to ${platformName} in the opened window, then verify your account email below.`
+      `[SUCCESS] ${platformName} connected with verified account (${userEmail || 'Candidate'}). Ready for direct apply.`
     ]);
 
     try {

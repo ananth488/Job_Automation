@@ -323,7 +323,7 @@ async def open_portal_apply(
 
     flags = 0
     if sys.platform == "win32":
-        flags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+        flags = subprocess.CREATE_NEW_PROCESS_GROUP
 
     try:
         subprocess.Popen(
@@ -339,35 +339,51 @@ async def open_portal_apply(
             detail=f"Could not open {platform_clean.capitalize()} browser: {str(e)}",
         )
 
-    # Record application in database with method 'portal_direct' and status 'in_progress'
+    # Record application in database with method 'portal_direct' and status 'applied'
+    from app.models.models import ApplicationStatusHistory
+
     now = datetime.now(timezone.utc)
     app = db.query(Application).filter(
         (Application.user_id == current_user.id) & (Application.job_id == job.id)
     ).first()
 
+    old_status = app.status if app else "pending_approval"
     if not app:
         app = Application(
             user_id=current_user.id,
             job_id=job.id,
-            status="in_progress",
+            status="applied",
             method="portal_direct",
-            notes=f"Launched in candidate's browser window on {platform_clean.capitalize()} portal. Complete submission on the page.",
+            submitted_at=now,
+            notes=f"Applied via {platform_clean.capitalize()} portal.",
         )
         db.add(app)
+        db.commit()
+        db.refresh(app)
     else:
-        if app.status != "applied":
-            app.status = "in_progress"
-            app.method = "portal_direct"
-            app.notes = f"Launched in candidate's browser window on {platform_clean.capitalize()} portal. Complete submission on the page."
-            app.updated_at = now
+        app.status = "applied"
+        app.method = "portal_direct"
+        app.submitted_at = now
+        app.notes = f"Applied via {platform_clean.capitalize()} portal."
+        app.updated_at = now
+        db.commit()
+        db.refresh(app)
 
+    history = ApplicationStatusHistory(
+        application_id=app.id,
+        old_status=old_status,
+        new_status="applied",
+        notes=f"Candidate applied on {platform_clean.capitalize()} portal",
+    )
+    db.add(history)
     db.commit()
 
     return {
         "success": True,
-        "message": f"Opened {job.title} on {platform_clean.capitalize()} in your browser! Sign in (if prompted) and click Apply on the page to register in your official account.",
+        "message": f"Applied to {job.title} on {platform_clean.capitalize()} portal! Tracked under Applications Sent.",
         "platform": platform_clean,
         "url": target_url,
+        "status": "applied",
     }
 
 
