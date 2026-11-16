@@ -119,6 +119,17 @@ async def launch_login(
 
     dest_url = target_url.strip() if target_url else default_url
     profile_dir.mkdir(parents=True, exist_ok=True)
+    is_company_site = False
+
+    # Remove stale lock files if any
+    for lock_name in ["SingletonLock", "lockfile", "SingletonCookie", "SingletonSocket"]:
+        lf = profile_dir / lock_name
+        if lf.exists():
+            try:
+                lf.unlink(missing_ok=True)
+            except Exception:
+                pass
+
     logger.info("Launching %s in persistent profile (%s) navigating to: %s", title, profile_dir, dest_url)
 
     async with async_playwright() as p:
@@ -418,13 +429,13 @@ async def launch_login(
         # Keep browser open appropriately:
         # If redirected to employer company website or manual mode, keep window open until candidate finishes!
         if is_company_site or not auto_apply:
-            logger.info("Company portal / manual apply active: Keeping browser open until candidate finishes and closes the window (up to 45 minutes)...")
+            logger.info("Company portal / manual login active: Keeping browser open until candidate finishes and closes the window (up to 45 minutes)...")
             for _ in range(1350):  # up to 45 minutes of manual completion time
                 await asyncio.sleep(2)
                 try:
-                    open_pages = [p for p in context.pages if not p.is_closed]
+                    open_pages = [p for p in context.pages if not p.is_closed()]
                     if not open_pages:
-                        logger.info("Candidate completed application and closed the browser window.")
+                        logger.info("Candidate completed and closed the browser window.")
                         break
                 except Exception:
                     break
@@ -434,7 +445,7 @@ async def launch_login(
             for _ in range(45):
                 await asyncio.sleep(1)
                 try:
-                    open_pages = [p for p in context.pages if not p.is_closed]
+                    open_pages = [p for p in context.pages if not p.is_closed()]
                     if not open_pages:
                         break
                 except Exception:
