@@ -55,3 +55,4 @@ def test_classify_hospital_nurse(parser):
     assert title == "Staff Nurse"
     assert "Apollo Hospitals" in company
     assert loc == "Chennai"
+

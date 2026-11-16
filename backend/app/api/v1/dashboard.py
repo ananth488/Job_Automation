@@ -46,6 +46,11 @@ def get_dashboard_stats(
             (Application.user_id == current_user.id) & (Application.status == "applied")
         )
     ) or 0
+    hr_shortlisted = db.scalar(
+        select(func.count(Application.id)).where(
+            (Application.user_id == current_user.id) & (Application.status == "shortlisted")
+        )
+    ) or 0
     interviews = db.scalar(
         select(func.count(Application.id)).where(
             (Application.user_id == current_user.id) & (Application.status == "interview")
@@ -88,6 +93,7 @@ def get_dashboard_stats(
         total_applications=total_apps,
         pending_approval=pending_approval,
         applied=applied,
+        hr_shortlisted=hr_shortlisted,
         interviews=interviews,
         offers=offers,
         rejected=rejected,

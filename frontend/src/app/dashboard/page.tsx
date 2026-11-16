@@ -34,6 +34,7 @@ export default function DashboardPage() {
     total_applications: 0,
     pending_approval: 0,
     applied: 0,
+    hr_shortlisted: 0,
     interviews: 0,
     offers: 0,
     rejected: 0,
@@ -204,23 +205,23 @@ export default function DashboardPage() {
           <div className="absolute -right-8 -bottom-8 w-48 h-48 bg-indigo-500/10 rounded-full blur-2xl"></div>
         </div>
 
-        {/* Requirement 11: 6 KPI Counters - Found, Shortlisted, Pending, Applied, Interviews, Rejected */}
+        {/* 6 KPI Counters in Logical Recruitment Lifecycle: Discovered -> AI Matched -> Pending Review -> Applications Sent -> HR Shortlisted -> Interviews */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
           <StatCard
-            title="Jobs Found"
+            title="Jobs Discovered"
             value={stats.total_jobs}
             subtitle="Naukri & Indeed"
             icon={<Briefcase className="w-4 h-4" />}
             color="indigo"
-            trend={stats.total_jobs > 0 ? { value: `+${stats.new_jobs_today || 12} new`, label: "since last run", isPositive: true } : undefined}
+            trend={stats.total_jobs > 0 ? { value: `+${stats.new_jobs_today || stats.total_jobs} new`, label: "scanned", isPositive: true } : undefined}
           />
           <StatCard
-            title="Shortlisted"
+            title="AI Matched"
             value={stats.total_matches}
-            subtitle="AI Match ≥ 75%"
+            subtitle="Best fit ≥ 75%"
             icon={<Sparkles className="w-4 h-4" />}
             color="sky"
-            trend={stats.total_matches > 0 ? { value: `${stats.avg_match_score || 85}% avg`, label: "match score", isPositive: true } : undefined}
+            trend={stats.total_matches > 0 ? { value: `${stats.avg_match_score || 85}% avg`, label: "fit score", isPositive: true } : undefined}
           />
           <StatCard
             title="Pending Review"
@@ -228,27 +229,29 @@ export default function DashboardPage() {
             subtitle="In approval queue"
             icon={<Clock className="w-4 h-4" />}
             color="amber"
+            trend={stats.pending_approval > 0 ? { value: `Cap: ${preferences.daily_limit}`, label: "daily limit", isPositive: true } : undefined}
           />
           <StatCard
             title="Applications Sent"
-            value={stats.applied || stats.total_applications}
-            subtitle="Verified on portals"
+            value={stats.applied || 0}
+            subtitle={stats.applied > 0 ? "Submitted to portals" : "Awaiting approval"}
             icon={<Send className="w-4 h-4" />}
             color="emerald"
             trend={stats.applied > 0 ? { value: `${stats.applied} sent`, label: "official total", isPositive: true } : undefined}
           />
           <StatCard
-            title="Interviews"
-            value={stats.interviews}
-            subtitle="Recruiter responses"
-            icon={<Calendar className="w-4 h-4" />}
+            title="HR Shortlisted"
+            value={stats.hr_shortlisted || 0}
+            subtitle="Recruiter shortlist"
+            icon={<CheckCircle className="w-4 h-4" />}
             color="purple"
+            trend={stats.hr_shortlisted > 0 ? { value: `${stats.hr_shortlisted} selected`, label: "by employers", isPositive: true } : undefined}
           />
           <StatCard
-            title="Rejected"
-            value={stats.rejected}
-            subtitle="Archive / Not selected"
-            icon={<CheckCircle className="w-4 h-4" />}
+            title="Interviews"
+            value={(stats.interviews || 0) + (stats.offers || 0)}
+            subtitle="Calls & offers"
+            icon={<Calendar className="w-4 h-4" />}
             color="rose"
           />
         </div>
@@ -378,8 +381,12 @@ export default function DashboardPage() {
                     <span className="font-semibold text-slate-800">{preferences.match_threshold}% &amp; above</span>
                   </div>
                   <div className="flex justify-between py-1 border-b border-slate-100">
-                    <span className="text-slate-500">Daily Limit:</span>
-                    <span className="font-semibold text-indigo-700 font-bold">{preferences.daily_limit} applications</span>
+                    <span className="text-slate-500">Daily Apply Cap:</span>
+                    <span className="font-semibold text-indigo-700 font-bold">{preferences.daily_limit} apps / day</span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-slate-100">
+                    <span className="text-slate-500">Search Pool:</span>
+                    <span className="font-semibold text-slate-800">50 scanned / run</span>
                   </div>
                   <div className="flex justify-between py-1 border-b border-slate-100">
                     <span className="text-slate-500">Schedule:</span>

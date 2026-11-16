@@ -141,6 +141,7 @@ export default function ApplicationsPage() {
   const getStatusVariant = (st: string) => {
     switch (st) {
       case 'interview':
+      case 'shortlisted':
         return 'success';
       case 'applied':
         return 'primary';
@@ -166,6 +167,11 @@ export default function ApplicationsPage() {
       id: 'applied',
       label: 'Applied',
       count: applications.filter((a) => a.status === 'applied').length,
+    },
+    {
+      id: 'shortlisted',
+      label: 'HR Shortlisted',
+      count: applications.filter((a) => a.status === 'shortlisted').length,
     },
     {
       id: 'failed',

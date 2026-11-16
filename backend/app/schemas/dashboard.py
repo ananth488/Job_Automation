@@ -11,6 +11,7 @@ class DashboardStats(BaseModel):
     total_applications: int = 0
     pending_approval: int = 0
     applied: int = 0
+    hr_shortlisted: int = 0
     interviews: int = 0
     offers: int = 0
     rejected: int = 0
