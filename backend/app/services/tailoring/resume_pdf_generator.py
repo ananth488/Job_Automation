@@ -13,13 +13,29 @@ import html
 import json
 from pathlib import Path
 import re
+import textwrap
 from typing import Any
 
-from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
-from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+try:
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    REPORTLAB_AVAILABLE = True
+except ImportError:
+    REPORTLAB_AVAILABLE = False
+    colors = None  # type: ignore
+    TA_CENTER = TA_LEFT = TA_RIGHT = None  # type: ignore
+    letter = None  # type: ignore
+    ParagraphStyle = None  # type: ignore
+    getSampleStyleSheet = None  # type: ignore
+    HRFlowable = None  # type: ignore
+    Paragraph = None  # type: ignore
+    SimpleDocTemplate = None  # type: ignore
+    Spacer = None  # type: ignore
+    Table = None  # type: ignore
+    TableStyle = None  # type: ignore
 
 from app.models.models import CandidateProfile, Job, Resume
 
@@ -300,6 +316,17 @@ class TailoredResumePdfGenerator:
 
         file_path = self.output_dir / output_filename
 
+        if not REPORTLAB_AVAILABLE:
+            return self._generate_pure_pdf(
+                profile=profile,
+                job=job,
+                matched_skills=matched_skills,
+                missing_skills=missing_skills,
+                tailored_summary=tailored_summary,
+                file_path=file_path,
+                original_resume=original_resume,
+            )
+
         doc = SimpleDocTemplate(
             str(file_path),
             pagesize=letter,
@@ -557,6 +584,13 @@ class TailoredResumePdfGenerator:
 
         file_path = self.output_dir / output_filename
 
+        if not REPORTLAB_AVAILABLE:
+            return self._generate_pure_master_pdf(
+                profile=profile,
+                resume=resume,
+                file_path=file_path,
+            )
+
         doc = SimpleDocTemplate(
             str(file_path),
             pagesize=letter,
@@ -681,6 +715,353 @@ class TailoredResumePdfGenerator:
 
         doc.build(elements)
         return file_path
+
+    @staticmethod
+    def _write_minimal_pdf(file_path: Path, sections: list[tuple[str, list[Any]]]) -> Path:
+        """Pure-Python zero-dependency ATS PDF generator fallback."""
+        page_w, page_h = 612, 792
+        margin_x = 40
+        margin_top = 750
+        margin_bottom = 40
+        line_h = 13
+
+        pages_data: list[bytes] = []
+        current_ops: list[str] = []
+        current_y = margin_top
+
+        def sanitize_line(s: Any) -> str:
+            if not s:
+                return ""
+            raw = html.unescape(str(s))
+            raw = re.sub(r"<[^>]+>", "", raw)
+            replacements = {
+                "\u2013": "-",
+                "\u2014": " - ",
+                "\u2022": "*",
+                "▸": "*",
+                "\u2018": "'",
+                "\u2019": "'",
+                "\u201c": '"',
+                "\u201d": '"',
+                "\xa0": " ",
+            }
+            for k, v in replacements.items():
+                raw = raw.replace(k, v)
+            return raw.encode("latin-1", "replace").decode("latin-1")
+
+        def start_new_page():
+            nonlocal current_ops, current_y
+            if current_ops:
+                current_ops.append("ET")
+                pages_data.append("\n".join(current_ops).encode("latin-1", "replace"))
+            current_ops = ["BT", f"{margin_x} {margin_top} Td", f"{line_h} TL"]
+            current_y = margin_top
+
+        start_new_page()
+
+        def add_line(text: str, font_size: float = 9.0, is_bold: bool = False, space_after: float = 2.0):
+            nonlocal current_y
+            clean_text = sanitize_line(text)
+            font = "/F2" if is_bold else "/F1"
+            wrapped = textwrap.wrap(clean_text, width=95) if len(clean_text) > 95 else [clean_text]
+            for idx, line in enumerate(wrapped):
+                needed = font_size + (space_after if idx == len(wrapped) - 1 else 2.0)
+                if current_y - needed < margin_bottom:
+                    start_new_page()
+                esc = line.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+                current_ops.append(f"{font} {font_size} Tf ({esc}) Tj")
+                current_ops.append(f"0 -{needed} Td")
+                current_y -= needed
+
+        for heading, lines in sections:
+            if heading == "__HEADER__":
+                if len(lines) > 0 and lines[0]:
+                    add_line(str(lines[0]).upper(), font_size=16.0, is_bold=True, space_after=4.0)
+                if len(lines) > 1 and lines[1]:
+                    add_line(str(lines[1]), font_size=10.5, is_bold=True, space_after=3.0)
+                if len(lines) > 2 and lines[2]:
+                    add_line(str(lines[2]), font_size=8.5, is_bold=False, space_after=8.0)
+            else:
+                add_line(heading.upper(), font_size=10.5, is_bold=True, space_after=4.0)
+                for l in lines:
+                    if isinstance(l, tuple):
+                        add_line(f"  * {l[0]}", font_size=8.5, space_after=2.0)
+                    else:
+                        add_line(str(l), font_size=8.5, space_after=2.0)
+                add_line("", font_size=4.0, space_after=4.0)
+
+        if current_ops:
+            current_ops.append("ET")
+            pages_data.append("\n".join(current_ops).encode("latin-1", "replace"))
+
+        num_pages = len(pages_data)
+        obj_id = 1
+        cat_id = obj_id
+        obj_id += 1
+        pages_id = obj_id
+        obj_id += 1
+
+        page_ids = []
+        content_ids = []
+        for _ in range(num_pages):
+            page_ids.append(obj_id)
+            obj_id += 1
+            content_ids.append(obj_id)
+            obj_id += 1
+
+        f1_id = obj_id
+        obj_id += 1
+        f2_id = obj_id
+        obj_id += 1
+
+        objects: dict[int, bytes] = {}
+        objects[cat_id] = f"<< /Type /Catalog /Pages {pages_id} 0 R >>".encode("ascii")
+        kids_str = " ".join(f"{pid} 0 R" for pid in page_ids)
+        objects[pages_id] = f"<< /Type /Pages /Kids [{kids_str}] /Count {num_pages} >>".encode("ascii")
+
+        for pid, cid in zip(page_ids, content_ids):
+            objects[pid] = (
+                f"<< /Type /Page /Parent {pages_id} 0 R /MediaBox [0 0 {page_w} {page_h}] "
+                f"/Contents {cid} 0 R /Resources << /Font << /F1 {f1_id} 0 R /F2 {f2_id} 0 R >> >> >>"
+            ).encode("ascii")
+
+        for cid, stream in zip(content_ids, pages_data):
+            objects[cid] = f"<< /Length {len(stream)} >>\nstream\n".encode("ascii") + stream + b"\nendstream"
+
+        objects[f1_id] = b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>"
+        objects[f2_id] = b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>"
+
+        pdf = bytearray(b"%PDF-1.4\n")
+        offsets: dict[int, int] = {}
+        for i in range(1, obj_id):
+            offsets[i] = len(pdf)
+            pdf.extend(f"{i} 0 obj\n".encode("ascii"))
+            pdf.extend(objects[i])
+            pdf.extend(b"\nendobj\n")
+
+        xref_offset = len(pdf)
+        pdf.extend(f"xref\n0 {obj_id}\n".encode("ascii"))
+        pdf.extend(b"0000000000 65535 f \n")
+        for i in range(1, obj_id):
+            pdf.extend(f"{offsets[i]:010d} 00000 n \n".encode("ascii"))
+
+        pdf.extend(f"trailer\n<< /Size {obj_id} /Root {cat_id} 0 R >>\n".encode("ascii"))
+        pdf.extend(f"startxref\n{xref_offset}\n%%EOF\n".encode("ascii"))
+
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(file_path, "wb") as f:
+            f.write(pdf)
+
+        return file_path
+
+    def _generate_pure_pdf(
+        self,
+        profile: CandidateProfile,
+        job: Job,
+        matched_skills: list[str] | None,
+        missing_skills: list[str] | None,
+        tailored_summary: str | None,
+        file_path: Path,
+        original_resume: Resume | None,
+    ) -> Path:
+        sections: list[tuple[str, list[Any]]] = []
+
+        full_name = profile.full_name or (
+            profile.email.split("@")[0].replace(".", " ").title() if profile.email else "Candidate"
+        )
+        dynamic_title = job.title or "Professional"
+
+        contact_parts = []
+        if profile.location:
+            contact_parts.append(profile.location.strip())
+        if profile.email:
+            contact_parts.append(profile.email.strip())
+        if profile.phone:
+            contact_parts.append(profile.phone.strip())
+        contact_str = " | ".join(contact_parts)
+
+        sections.append(("__HEADER__", [full_name, dynamic_title, contact_str]))
+
+        summary = tailored_summary or profile.summary
+        if summary:
+            sections.append(("PROFESSIONAL SUMMARY", [summary]))
+
+        all_tailored_skills: list[str] = []
+        if matched_skills:
+            all_tailored_skills.extend(matched_skills)
+        if missing_skills:
+            all_tailored_skills.extend(missing_skills)
+        if profile.skills:
+            for s in profile.skills:
+                if s not in all_tailored_skills:
+                    all_tailored_skills.append(s)
+
+        grouped = self._group_skills_dynamically(all_tailored_skills)
+        if grouped:
+            skill_lines = [f"{cat}: {', '.join(skills)}" for cat, skills in grouped]
+            sections.append(("SKILLS & EXPERTISE", skill_lines))
+
+        experiences = profile.experience or (
+            original_resume.parsed_data.get("experience")
+            if original_resume and original_resume.parsed_data
+            else None
+        )
+        if experiences:
+            exp_lines: list[Any] = []
+            for exp in experiences:
+                if isinstance(exp, dict):
+                    title = exp.get("title") or "Professional"
+                    company = exp.get("company") or ""
+                    dates = exp.get("dates") or f"{exp.get('start', '')} - {exp.get('end', '')}".strip(" -")
+                    location = exp.get("location") or ""
+                    meta = " | ".join(p for p in [dates, location] if p)
+                    header = f"{title} - {company} ({meta})" if meta else f"{title} - {company}"
+                    exp_lines.append(header)
+                    bullets = exp.get("bullets") or (
+                        extract_clean_bullets(exp.get("description")) if exp.get("description") else None
+                    )
+                    if bullets and isinstance(bullets, list):
+                        for b in bullets[:4]:
+                            exp_lines.append((b,))
+                    elif exp.get("description"):
+                        exp_lines.append(exp.get("description"))
+                else:
+                    exp_lines.append(str(exp))
+            sections.append(("PROFESSIONAL EXPERIENCE", exp_lines))
+
+        projects = None
+        if profile.projects and isinstance(profile.projects, list) and len(profile.projects) > 0:
+            projects = profile.projects
+        elif original_resume and original_resume.parsed_data and original_resume.parsed_data.get("projects"):
+            projects = original_resume.parsed_data.get("projects")
+
+        if projects and isinstance(projects, list):
+            proj_lines: list[Any] = []
+            for p in projects[:3]:
+                if isinstance(p, dict):
+                    p_name = p.get("name") or p.get("title") or "Project"
+                    p_tech = p.get("technologies") or p.get("tools") or ""
+                    proj_lines.append(f"{p_name} ({p_tech})" if p_tech else p_name)
+                    p_bullets = p.get("bullets") or (
+                        extract_clean_bullets(p.get("description")) if p.get("description") else None
+                    )
+                    if p_bullets and isinstance(p_bullets, list):
+                        for b in p_bullets[:3]:
+                            proj_lines.append((b,))
+                    elif p.get("description"):
+                        proj_lines.append(p.get("description"))
+            if proj_lines:
+                sections.append(("KEY PROJECTS", proj_lines))
+
+        certs = profile.certifications or (
+            original_resume.parsed_data.get("certifications")
+            if original_resume and original_resume.parsed_data
+            else None
+        )
+        if certs and isinstance(certs, list):
+            sections.append(("CERTIFICATIONS & CREDENTIALS", [(str(c),) for c in certs]))
+
+        education_items = profile.education or (
+            original_resume.parsed_data.get("education")
+            if original_resume and original_resume.parsed_data
+            else None
+        )
+        if education_items and isinstance(education_items, list):
+            edu_lines = []
+            for edu in education_items:
+                if isinstance(edu, dict):
+                    deg = edu.get("degree") or "Degree"
+                    inst = edu.get("institution") or edu.get("university") or ""
+                    yr = edu.get("year") or edu.get("dates") or ""
+                    parts = [p for p in [deg, inst, yr] if p]
+                    edu_lines.append(" | ".join(parts))
+                else:
+                    edu_lines.append(str(edu))
+            sections.append(("EDUCATION", edu_lines))
+
+        return self._write_minimal_pdf(file_path, sections)
+
+    def _generate_pure_master_pdf(
+        self,
+        profile: CandidateProfile,
+        resume: Resume | None,
+        file_path: Path,
+    ) -> Path:
+        sections: list[tuple[str, list[Any]]] = []
+
+        full_name = profile.full_name or (
+            profile.email.split("@")[0].replace(".", " ").title() if profile.email else "Candidate"
+        )
+        primary_title = "Professional"
+        if profile.experience and isinstance(profile.experience, list) and len(profile.experience) > 0:
+            primary_title = profile.experience[0].get("title", primary_title)
+
+        contact_parts = []
+        if profile.location:
+            contact_parts.append(profile.location.strip())
+        if profile.email:
+            contact_parts.append(profile.email.strip())
+        if profile.phone:
+            contact_parts.append(profile.phone.strip())
+        contact_str = " | ".join(contact_parts)
+
+        sections.append(("__HEADER__", [full_name, primary_title, contact_str]))
+
+        summary = profile.summary or (resume.parsed_data.get("summary") if resume and resume.parsed_data else None)
+        if summary:
+            sections.append(("PROFESSIONAL SUMMARY", [summary]))
+
+        skills = profile.skills or (resume.parsed_data.get("skills") if resume and resume.parsed_data else None)
+        if skills:
+            grouped = self._group_skills_dynamically(skills)
+            if grouped:
+                sections.append(
+                    ("SKILLS & EXPERTISE", [f"{cat}: {', '.join(items)}" for cat, items in grouped])
+                )
+
+        experiences = profile.experience or (
+            resume.parsed_data.get("experience") if resume and resume.parsed_data else None
+        )
+        if experiences:
+            exp_lines: list[Any] = []
+            for exp in experiences:
+                if isinstance(exp, dict):
+                    title = exp.get("title") or "Professional"
+                    company = exp.get("company") or ""
+                    dates = exp.get("dates") or f"{exp.get('start', '')} - {exp.get('end', '')}".strip(" -")
+                    location = exp.get("location") or ""
+                    meta = " | ".join(p for p in [dates, location] if p)
+                    header = f"{title} - {company} ({meta})" if meta else f"{title} - {company}"
+                    exp_lines.append(header)
+                    bullets = exp.get("bullets") or (
+                        extract_clean_bullets(exp.get("description")) if exp.get("description") else None
+                    )
+                    if bullets and isinstance(bullets, list):
+                        for b in bullets[:4]:
+                            exp_lines.append((b,))
+                    elif exp.get("description"):
+                        exp_lines.append(exp.get("description"))
+                else:
+                    exp_lines.append(str(exp))
+            sections.append(("PROFESSIONAL EXPERIENCE", exp_lines))
+
+        education = profile.education or (
+            resume.parsed_data.get("education") if resume and resume.parsed_data else None
+        )
+        if education:
+            edu_lines = []
+            for edu in education:
+                if isinstance(edu, dict):
+                    deg = edu.get("degree") or "Degree"
+                    inst = edu.get("institution") or ""
+                    yr = edu.get("year") or ""
+                    parts = [p for p in [deg, inst, yr] if p]
+                    edu_lines.append(" | ".join(parts))
+                else:
+                    edu_lines.append(str(edu))
+            sections.append(("EDUCATION", edu_lines))
+
+        return self._write_minimal_pdf(file_path, sections)
 
 
 tailored_pdf_generator = TailoredResumePdfGenerator()
