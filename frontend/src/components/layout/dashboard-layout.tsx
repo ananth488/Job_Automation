@@ -1,8 +1,10 @@
 'use client';
 
-import React, { useState, Suspense } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
+import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
+import { setAuthCookie, clearAuthCookie } from '@/lib/auth-cookie';
 
 export interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -11,6 +13,19 @@ export interface DashboardLayoutProps {
 
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, title }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const router = useRouter();
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('access_token');
+      if (!token) {
+        clearAuthCookie();
+        router.replace('/login');
+      } else {
+        setAuthCookie(token);
+      }
+    }
+  }, [router]);
 
   return (
     <div className="min-h-screen bg-slate-50 flex">

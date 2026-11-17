@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { clearAuthCookie } from '@/lib/auth-cookie';
 import type {
   AuthResponse,
   LoginCredentials,
@@ -56,6 +57,8 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401 && typeof window !== 'undefined') {
       localStorage.removeItem('access_token');
+      localStorage.removeItem('user');
+      clearAuthCookie();
       window.location.href = '/login';
     }
     return Promise.reject(error);

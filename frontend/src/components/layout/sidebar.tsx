@@ -20,6 +20,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/use-auth';
 import { API_BASE_URL } from '@/lib/api';
+import { clearAuthCookie } from '@/lib/auth-cookie';
 
 export interface SidebarProps {
   isOpen: boolean;
@@ -75,6 +76,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const handleLogout = () => {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('access_token');
+      localStorage.removeItem('user');
+      clearAuthCookie();
       window.location.href = '/login';
     }
   };

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Sparkles,
@@ -15,10 +15,24 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { API_BASE_URL } from '@/lib/api';
+import { setAuthCookie } from '@/lib/auth-cookie';
 
 export default function LoginPage() {
   const router = useRouter();
   const [mode, setMode] = useState<'login' | 'register'>('login');
+
+  // If already logged in, redirect to dashboard or requested page
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('access_token');
+      if (token) {
+        setAuthCookie(token);
+        const searchParams = new URLSearchParams(window.location.search);
+        const redirectUrl = searchParams.get('redirect') || '/dashboard';
+        router.replace(redirectUrl);
+      }
+    }
+  }, [router]);
 
   // Form states
   const [fullName, setFullName] = useState('');
@@ -84,11 +98,14 @@ export default function LoginPage() {
 
       const data = await res.json();
       localStorage.setItem('access_token', data.access_token);
+      setAuthCookie(data.access_token);
       if (data.user) {
         localStorage.setItem('user', JSON.stringify(data.user));
       }
       toast.success(`Welcome back, ${data.user?.full_name || 'Candidate'}!`);
-      router.push('/dashboard');
+      const searchParams = new URLSearchParams(window.location.search);
+      const redirectUrl = searchParams.get('redirect') || '/dashboard';
+      router.push(redirectUrl);
     } catch (err: any) {
       toast.error(err.message || 'Login failed. Please check backend connection.');
     } finally {
@@ -141,10 +158,13 @@ export default function LoginPage() {
       if (loginRes.ok) {
         const tokenData = await loginRes.json();
         localStorage.setItem('access_token', tokenData.access_token);
+        setAuthCookie(tokenData.access_token);
         if (tokenData.user) {
           localStorage.setItem('user', JSON.stringify(tokenData.user));
         }
-        router.push('/dashboard');
+        const searchParams = new URLSearchParams(window.location.search);
+        const redirectUrl = searchParams.get('redirect') || '/dashboard';
+        router.push(redirectUrl);
       } else {
         setMode('login');
       }

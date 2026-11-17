@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { API_BASE_URL } from '@/lib/api';
+import { setAuthCookie, clearAuthCookie } from '@/lib/auth-cookie';
 
 export interface CurrentUser {
   id: number | string;
@@ -28,9 +29,13 @@ export function useAuth() {
     // 2. Fetch fresh user details from /auth/me
     const token = localStorage.getItem('access_token');
     if (!token) {
+      clearAuthCookie();
       setLoading(false);
       return;
     }
+
+    // Keep cookie synchronized with localStorage
+    setAuthCookie(token);
 
     fetch(`${API_BASE_URL}/auth/me`, {
       headers: {
@@ -44,6 +49,7 @@ export function useAuth() {
         if (res.status === 401) {
           localStorage.removeItem('access_token');
           localStorage.removeItem('user');
+          clearAuthCookie();
           setUser(null);
         }
         throw new Error('Not authenticated');
@@ -73,6 +79,7 @@ export function useAuth() {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('access_token');
       localStorage.removeItem('user');
+      clearAuthCookie();
       window.location.href = '/login';
     }
   };
