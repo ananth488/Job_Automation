@@ -352,7 +352,37 @@ class AIChatService:
                 "3. It computes the minimum set of real DOM operations and applies them in a single batch (Tree Mutation), avoiding costly browser reflows and repaints."
             )
 
-        # 7. TECHNICAL: Interview Preparation
+        # 7. TECHNICAL: LeetCode & DSA
+        if re.search(r"\b(leetcode|dsa|data structure|data structures|algorithms|algo)\b", msg):
+            return (
+                "### What is LeetCode & DSA?\n\n"
+                "**LeetCode** is the world's most popular online platform for practicing software engineering coding challenges, primarily focusing on **Data Structures & Algorithms (DSA)** to prepare for technical interviews at top tech companies (FAANG/MANG & top startups).\n\n"
+                "#### Core Topics & Patterns:\n"
+                "1. **Essential Data Structures:** Arrays, Hash Maps / Sets, Linked Lists, Stacks & Queues, Binary Trees, Graphs, Heaps/Tries.\n"
+                "2. **Algorithmic Patterns:**\n"
+                "   - **Two Pointers & Sliding Window:** Array/String sub-problems.\n"
+                "   - **Binary Search:** O(log N) searches on sorted sets.\n"
+                "   - **BFS & DFS:** Tree and graph traversals.\n"
+                "   - **Dynamic Programming (DP):** Breaking down overlapping subproblems with memoization/tabulation.\n\n"
+                "#### Recommended Preparation Roadmap:\n"
+                "- Start with the curated **NeetCode 150** or **Blind 75** list.\n"
+                "- Focus on pattern recognition rather than memorizing individual solutions.\n"
+                "- Write clean code with time & space complexity analysis (Big-O notation)."
+            )
+
+        # 8. TECHNICAL: JavaScript & Web Concepts
+        if re.search(r"\b(javascript|js|event loop|closure|closures|promise|promises|async await)\b", msg):
+            return (
+                "### Modern JavaScript Fundamentals\n\n"
+                "JavaScript is a single-threaded, non-blocking, asynchronous, concurrent programming language featuring a prototype-based object model.\n\n"
+                "#### Critical Frontend Concepts:\n"
+                "- **Event Loop:** Manages execution of code, collecting and processing events, and executing queued sub-tasks via Call Stack, Microtask Queue (Promises), and Macrotask Queue (setTimeout).\n"
+                "- **Closures:** A function bundled together with references to its surrounding lexical environment, allowing inner functions to access outer variables even after the outer function has returned.\n"
+                "- **Promises & Async/Await:** Syntactic sugar for handling asynchronous workflows with clean, linear error-handling via `try/catch`.\n"
+                "- **Hoisting & Scope:** Difference between `var` (function-scoped, hoisted) and `let`/`const` (block-scoped, temporal dead zone)."
+            )
+
+        # 9. TECHNICAL: Interview Preparation
         if any(w in msg for w in ("interview", "prepare", "questions", "tips", "hiring")):
             return (
                 "### Top Frontend Developer Technical Interview Questions:\n\n"
