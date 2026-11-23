@@ -319,9 +319,14 @@ export interface ChatResponseData {
 export const chatApi = {
   sendMessage: async (
     message: string,
-    history: ChatMessagePayload[] = []
+    history: ChatMessagePayload[] = [],
+    geminiApiKey?: string
   ): Promise<ChatResponseData> => {
-    const { data } = await api.post('/chat', { message, history });
+    const { data } = await api.post('/chat', {
+      message,
+      history,
+      gemini_api_key: geminiApiKey || undefined,
+    });
     return data;
   },
   getSuggestions: async (): Promise<string[]> => {

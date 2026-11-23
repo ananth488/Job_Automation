@@ -21,6 +21,7 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=4000)
     history: list[ChatMessage] = Field(default_factory=list)
+    gemini_api_key: str | None = Field(default=None, description="Optional user-provided Gemini API key")
 
 
 class ChatResponse(BaseModel):
@@ -47,6 +48,7 @@ async def chat_with_copilot(
         history=history_dicts,
         user=current_user,
         db=db,
+        gemini_api_key=payload.gemini_api_key,
     )
     return ChatResponse(**result)
 

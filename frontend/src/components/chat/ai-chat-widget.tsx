@@ -11,10 +11,13 @@ import {
   User,
   RotateCcw,
   Minimize2,
+  Maximize2,
+  Columns,
   ChevronDown,
   ArrowUpRight,
   Loader2,
-  CheckCircle2,
+  KeyRound,
+  Check,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { chatApi, type ChatMessagePayload } from '@/lib/api';
@@ -28,35 +31,33 @@ interface UIMessage {
 
 export function AiChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
+  // Screen size: 'half' (50% screen - default), 'full' (fullscreen), 'compact' (floating card)
+  const [sizeMode, setSizeMode] = useState<'half' | 'full' | 'compact'>('half');
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showKeyModal, setShowKeyModal] = useState(false);
+  const [geminiKey, setGeminiKey] = useState('');
+  const [savedKey, setSavedKey] = useState('');
+
   const [messages, setMessages] = useState<UIMessage[]>([
     {
       id: 'welcome',
       role: 'model',
       content:
-        'வணக்கம்! நான் உங்களது **AI Career Copilot**.\n\nநமது Application-ல் உள்ள **Jobs, Applications, Approval Queue, Bot Status** பற்றிய நேரடி விபரங்கள் அல்லது எந்தவொரு **Coding / Technical / Interview** கேள்விகளையும் என்னிடம் கேட்கலாம்!',
+        'Hello! I am your **AI Career Copilot**.\n\nYou can ask me live questions about your **Jobs Discovered, Applications Tracker, Approval Queue, and Bot Status**, or ask any **Technical, Coding (React, Next.js, TypeScript), and Interview Preparation** questions!',
       timestamp: 'Just now',
     },
-  ]);
-  const [suggestions, setSuggestions] = useState<string[]>([
-    '📊 Innaki evlo jobs vanthuchu?',
-    '⏳ Show jobs in my Approval Queue',
-    '🎯 Next.js / React interview tips',
-    '🤖 Is my Bot active and scheduled?',
   ]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // Fetch dynamic suggestions on mount
-    chatApi
-      .getSuggestions()
-      .then((s) => {
-        if (s && s.length > 0) setSuggestions(s);
-      })
-      .catch(() => {});
+    if (typeof window !== 'undefined') {
+      const storedKey = localStorage.getItem('gemini_api_key') || '';
+      setGeminiKey(storedKey);
+      setSavedKey(storedKey);
+    }
   }, []);
 
   useEffect(() => {
@@ -64,7 +65,18 @@ export function AiChatWidget() {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
       inputRef.current?.focus();
     }
-  }, [isOpen, messages]);
+  }, [isOpen, messages, sizeMode]);
+
+  const handleSaveKey = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (typeof window !== 'undefined') {
+      const trimmed = geminiKey.trim();
+      localStorage.setItem('gemini_api_key', trimmed);
+      setSavedKey(trimmed);
+      setShowKeyModal(false);
+      toast.success(trimmed ? 'Gemini API Key saved!' : 'Gemini Key cleared. Using built-in engine.');
+    }
+  };
 
   const handleSend = async (textToSend?: string) => {
     const text = (textToSend || input).trim();
@@ -82,7 +94,6 @@ export function AiChatWidget() {
     setLoading(true);
 
     try {
-      // Build history for context
       const historyPayload: ChatMessagePayload[] = messages
         .filter((m) => m.id !== 'welcome')
         .slice(-6)
@@ -91,7 +102,7 @@ export function AiChatWidget() {
           content: m.content,
         }));
 
-      const res = await chatApi.sendMessage(text, historyPayload);
+      const res = await chatApi.sendMessage(text, historyPayload, savedKey);
 
       const botMsg: UIMessage = {
         id: `bot-${Date.now()}`,
@@ -101,14 +112,14 @@ export function AiChatWidget() {
       };
 
       setMessages((prev) => [...prev, botMsg]);
-    } catch (err: any) {
+    } catch {
       toast.error('Could not get response from AI Copilot');
       setMessages((prev) => [
         ...prev,
         {
           id: `err-${Date.now()}`,
           role: 'model',
-          content: 'மன்னிக்கவும், AI Server உடன் தொடர்புகொள்ள முடியவில்லை. தயவுசெய்து சிறிது நேரம் கழித்து மீண்டும் முயற்சிக்கவும்.',
+          content: 'Sorry, I encountered an issue connecting to the AI server. Please try again.',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         },
       ]);
@@ -122,15 +133,32 @@ export function AiChatWidget() {
       {
         id: 'welcome-reset',
         role: 'model',
-        content: 'உரையாடல் ரீசெட் செய்யப்பட்டது. நீங்கள் என்ன தெரிந்து கொள்ள விரும்புகிறீர்கள்?',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        content: 'Conversation cleared. How can I help you today?',
+        timestamp: 'Just now',
       },
     ]);
   };
 
-  // Helper to render markdown links, bold text, and linebreaks
+  // Cycle sizes: half -> full -> compact -> half
+  const cycleSize = () => {
+    if (sizeMode === 'half') setSizeMode('full');
+    else if (sizeMode === 'full') setSizeMode('compact');
+    else setSizeMode('half');
+  };
+
+  const getSizeClasses = () => {
+    if (sizeMode === 'full') {
+      return 'w-[calc(100vw-2rem)] h-[calc(100vh-2rem)] max-h-[96vh] right-4 bottom-4';
+    }
+    if (sizeMode === 'compact') {
+      return 'w-[calc(100vw-2rem)] sm:w-[430px] h-[640px] max-h-[85vh] right-4 bottom-4';
+    }
+    // Default 'half' - 50% screen width, full height
+    return 'w-full sm:w-[50vw] md:w-[48vw] min-w-[380px] max-w-[800px] h-[calc(100vh-2rem)] max-h-[96vh] right-4 bottom-4';
+  };
+
+  // Helper to render markdown links, bold text, and code blocks
   const renderFormattedMessage = (content: string) => {
-    // Replace markdown links [Text](url)
     const parts = content.split(/(\[[^\]]+\]\([^)]+\))/g);
 
     return (
@@ -167,15 +195,12 @@ export function AiChatWidget() {
             );
           }
 
-          // Process bullet points and bold lines
           const lines = part.split('\n');
           return (
             <React.Fragment key={index}>
               {lines.map((line, lIdx) => {
                 const isBullet = line.trim().startsWith('- ') || line.trim().startsWith('* ');
                 const cleanLine = isBullet ? line.trim().substring(2) : line;
-
-                // Process bold **text**
                 const boldChunks = cleanLine.split(/(\*\*[^*]+\*\*)/g);
 
                 return (
@@ -223,14 +248,16 @@ export function AiChatWidget() {
           </div>
           <span className="font-bold text-sm tracking-wide">AI Copilot</span>
           <span className="hidden sm:inline-block text-[11px] bg-white/20 px-2 py-0.5 rounded-full font-medium">
-            Live DB
+            Half Screen
           </span>
         </button>
       )}
 
-      {/* Expandable Chat Modal Window */}
+      {/* Expandable Half-Screen / Full-Screen Chat Modal */}
       {isOpen && (
-        <div className="fixed bottom-6 right-6 z-50 w-[calc(100vw-2rem)] sm:w-[430px] h-[600px] max-h-[85vh] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-6 duration-200">
+        <div
+          className={`fixed z-50 bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-6 duration-200 ${getSizeClasses()}`}
+        >
           {/* Header */}
           <div className="px-4 py-3.5 bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white flex items-center justify-between shadow-sm shrink-0">
             <div className="flex items-center gap-2.5">
@@ -244,12 +271,51 @@ export function AiChatWidget() {
                     <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping" />
                     Online
                   </span>
+                  {sizeMode === 'half' && (
+                    <span className="hidden sm:inline-block text-[9px] bg-indigo-500/30 text-indigo-200 px-1.5 py-0.5 rounded">
+                      Half Screen
+                    </span>
+                  )}
+                  {sizeMode === 'full' && (
+                    <span className="hidden sm:inline-block text-[9px] bg-purple-500/30 text-purple-200 px-1.5 py-0.5 rounded">
+                      Full Screen
+                    </span>
+                  )}
                 </div>
                 <p className="text-[11px] text-slate-300">Live Application Data & Universal Intelligence</p>
               </div>
             </div>
 
             <div className="flex items-center gap-1">
+              {/* Configure Gemini API Key */}
+              <button
+                onClick={() => setShowKeyModal(!showKeyModal)}
+                title="Configure Gemini API Key"
+                className={`p-1.5 rounded-lg transition-colors ${
+                  savedKey
+                    ? 'text-emerald-400 hover:text-emerald-300 hover:bg-slate-700/50'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+                }`}
+              >
+                <KeyRound className="w-4 h-4" />
+              </button>
+
+              {/* Cycle Size (Half / Full / Compact) */}
+              <button
+                onClick={cycleSize}
+                title={`Toggle Screen Size (Current: ${sizeMode})`}
+                className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-lg transition-colors"
+              >
+                {sizeMode === 'half' ? (
+                  <Maximize2 className="w-4 h-4" />
+                ) : sizeMode === 'full' ? (
+                  <Columns className="w-4 h-4" />
+                ) : (
+                  <Maximize2 className="w-4 h-4" />
+                )}
+              </button>
+
+              {/* Clear chat */}
               <button
                 onClick={handleClear}
                 title="Clear Chat History"
@@ -257,15 +323,51 @@ export function AiChatWidget() {
               >
                 <RotateCcw className="w-4 h-4" />
               </button>
+
+              {/* Minimize/Close */}
               <button
                 onClick={() => setIsOpen(false)}
-                title="Minimize Chat"
+                title="Close Chat"
                 className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-lg transition-colors"
               >
                 <Minimize2 className="w-4 h-4" />
               </button>
             </div>
           </div>
+
+          {/* Optional Gemini API Key Drawer */}
+          {showKeyModal && (
+            <div className="p-3 bg-slate-900 text-white border-b border-slate-700 text-xs shrink-0 animate-in fade-in duration-150">
+              <form onSubmit={handleSaveKey} className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-200">Google Gemini API Key (Optional):</span>
+                  <a
+                    href="https://aistudio.google.com/app/apikey"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[11px] text-indigo-400 hover:underline"
+                  >
+                    Get Free Key &rarr;
+                  </a>
+                </div>
+                <div className="flex gap-1.5">
+                  <input
+                    type="password"
+                    value={geminiKey}
+                    onChange={(e) => setGeminiKey(e.target.value)}
+                    placeholder="AIzaSy... (leave empty for built-in engine)"
+                    className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-hidden focus:border-indigo-500"
+                  />
+                  <button
+                    type="submit"
+                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg text-xs"
+                  >
+                    Save
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
 
           {/* Messages Area */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/60">
@@ -283,13 +385,17 @@ export function AiChatWidget() {
                   )}
 
                   <div
-                    className={`max-w-[85%] rounded-2xl p-3 shadow-sm ${
+                    className={`max-w-[85%] rounded-2xl p-3.5 shadow-sm ${
                       isBot
                         ? 'bg-white border border-slate-200/80 text-slate-800'
                         : 'bg-indigo-600 text-white rounded-br-none'
                     }`}
                   >
-                    {isBot ? renderFormattedMessage(m.content) : <p className="text-[13px] leading-relaxed whitespace-pre-wrap">{m.content}</p>}
+                    {isBot ? (
+                      renderFormattedMessage(m.content)
+                    ) : (
+                      <p className="text-[13px] leading-relaxed whitespace-pre-wrap">{m.content}</p>
+                    )}
                     <span
                       className={`block text-[10px] mt-1.5 ${
                         isBot ? 'text-slate-400' : 'text-indigo-200 text-right'
@@ -315,28 +421,12 @@ export function AiChatWidget() {
                 </div>
                 <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-sm flex items-center gap-2 text-slate-500 text-xs">
                   <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
-                  <span>Thinking & fetching live state...</span>
+                  <span>Thinking & fetching response in English...</span>
                 </div>
               </div>
             )}
             <div ref={messagesEndRef} />
           </div>
-
-          {/* Suggestions Pill Carousel */}
-          {suggestions.length > 0 && !loading && (
-            <div className="px-3 py-2 bg-slate-100/90 border-t border-slate-200 flex items-center gap-1.5 overflow-x-auto no-scrollbar shrink-0">
-              <span className="text-[11px] font-bold text-slate-500 shrink-0 px-1">Quick:</span>
-              {suggestions.map((s, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => handleSend(s)}
-                  className="whitespace-nowrap text-[11px] font-medium text-indigo-700 bg-white hover:bg-indigo-50 border border-indigo-200/70 hover:border-indigo-300 px-2.5 py-1 rounded-full transition-all shrink-0 shadow-xs"
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          )}
 
           {/* Input Footer */}
           <div className="p-3 bg-white border-t border-slate-200 shrink-0">
@@ -352,7 +442,7 @@ export function AiChatWidget() {
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask anything about jobs, status, coding, interview..."
+                placeholder="Ask in English: 'what is React?', 'how many jobs today?', 'interview prep'..."
                 disabled={loading}
                 className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:text-slate-400"
               />

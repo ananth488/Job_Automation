@@ -178,11 +178,9 @@ class AIChatService:
    - Give complete, clean code snippets and structured bullet points when asked technical questions.
 
 ### LANGUAGE & TONE GUIDELINES:
-- **Multilingual:** The user speaks English, Tamil, and Tanglish (e.g. "innaki evlo apply pannen", "react hooks pathi sollu").
-- Respond naturally in the SAME language/style the user writes to you in:
-  - If they ask in Tanglish/Tamil, reply warmly in Tanglish/Tamil.
-  - If they ask in English, reply in crisp professional English.
-- Be concise, accurate, encouraging, and structured.
+- **Language:** ALWAYS answer strictly in professional, well-structured, clean ENGLISH. Do NOT reply in Tamil or Tanglish unless the user explicitly asks for Tamil.
+- Provide crisp formatting, clear markdown headers, bullet points, and code blocks where applicable.
+- Be encouraging, precise, and practical.
 """
 
     async def generate_response(
@@ -191,11 +189,12 @@ class AIChatService:
         history: list[dict[str, str]],
         user: User,
         db: Session,
+        gemini_api_key: str | None = None,
     ) -> dict[str, Any]:
         """Generate AI response using Gemini API or live heuristic fallback."""
         context = self.gather_live_context(user, db)
         system_prompt = self._build_system_prompt(context)
-        api_key = self._get_api_key()
+        api_key = (gemini_api_key or "").strip() or self._get_api_key()
 
         # If Gemini API Key is present, call Google Gemini 2.0 Flash
         if api_key:
@@ -210,7 +209,7 @@ class AIChatService:
             except Exception as e:
                 logger.warning("Gemini API call failed (%s), falling back to heuristic engine", e)
 
-        # Fallback heuristic engine (always responds accurately with live DB data)
+        # Fallback heuristic engine (always responds in clear English with live DB data and technical knowledge)
         reply = self._generate_heuristic_response(message, context)
         return {
             "reply": reply,
@@ -230,14 +229,12 @@ class AIChatService:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.gemini_model}:generateContent?key={api_key}"
 
         contents: list[dict[str, Any]] = []
-        # Append up to last 8 turns of history
         for h in history[-8:]:
             role = "model" if h.get("role") in ("model", "assistant") else "user"
             content = h.get("content", "").strip()
             if content:
                 contents.append({"role": role, "parts": [{"text": content}]})
 
-        # Append current user message
         contents.append({"role": "user", "parts": [{"text": message}]})
 
         payload = {
@@ -265,65 +262,163 @@ class AIChatService:
         return "I could not generate a response at this time. Please try again."
 
     def _generate_heuristic_response(self, message: str, context: dict[str, Any]) -> str:
-        """Intelligent local fallback when Gemini API key is not yet configured or offline."""
+        """Intelligent English knowledge engine for technical questions and live application data."""
         msg = message.lower().strip()
         stats = context["today_stats"]
         name = context["candidate_name"]
 
-        # Today's jobs / how many jobs / apply counts
-        if any(w in msg for w in ("evlo", "evolo", "how many", "today", "innaki", "innaiku", "jobs", "apply", "applied", "sent", "shortlist", "count", "stat")):
+        # 1. TECHNICAL: React
+        if re.search(r"\b(react|react\.js|reactjs)\b", msg):
             return (
-                f"வணக்கம் {name}! உங்களது Application-ன் இன்றைய நேரடி நிலவரம் இதோ:\n\n"
-                f"- 🔍 **Jobs Found:** மொத்தம் **{stats['jobs_found']}** வேலைகள் (Naukri & Indeed) கண்டறியப்பட்டுள்ளன.\n"
-                f"- 🎯 **Shortlisted (AI Match >= 75%):** **{stats['shortlisted']}** வேலைகள் உங்கள் Profile-க்கு பொருந்துகின்றன.\n"
-                f"- 🚀 **Applications Sent:** **{stats['applications_sent_total']}** வேலைகளுக்கு Applications வெற்றிகரமாக அனுப்பப்பட்டுள்ளன (இன்று: {stats['applications_sent_today']}).\n"
-                f"- ⏳ **Pending Review:** **{stats['pending_approval']}** வேலைகள் Approval Queue-ல் காத்திருக்கின்றன.\n"
-                f"- 🛡️ **Daily Limit:** {stats['daily_limit']} jobs/day.\n\n"
-                f"உடனே விண்ணப்பிக்க [👉 Approval Queue](/approval-queue) பக்கத்திற்கு செல்லலாம்!"
+                "### What is React?\n\n"
+                "**React** (or React.js) is a popular, open-source front-end JavaScript library developed by Meta (Facebook) for building fast, responsive, and component-based user interfaces.\n\n"
+                "#### Core Architecture & Features:\n"
+                "1. **Component-Based Architecture:** UIs are divided into modular, reusable, self-contained pieces (components) with their own state and lifecycle.\n"
+                "2. **Virtual DOM (VDOM):** Instead of directly touching the browser's real DOM (which is slow), React keeps a lightweight virtual representation in memory. When state updates, it diffs changes efficiently and batches DOM updates.\n"
+                "3. **Declarative Syntax (JSX):** Combines HTML-like structure directly inside JavaScript, making component templates intuitive.\n"
+                "4. **Unidirectional Data Flow:** Data flows strictly downward from parent to child via `props`, ensuring predictable state updates and easier debugging.\n"
+                "5. **Hooks & Modern API:** Features built-in hooks (`useState`, `useEffect`, `useContext`, `useReducer`, `useMemo`, `useCallback`) for clean functional code.\n\n"
+                "#### Quick Example:\n"
+                "```jsx\n"
+                "import React, { useState } from 'react';\n\n"
+                "export default function Counter() {\n"
+                "  const [count, setCount] = useState(0);\n\n"
+                "  return (\n"
+                "    <button onClick={() => setCount(count + 1)}>\n"
+                "      Clicked {count} times\n"
+                "    </button>\n"
+                "  );\n"
+                "}\n"
+                "```\n\n"
+                "React forms the foundation of modern frameworks like **Next.js**, which adds full-stack capabilities, server-side rendering, and production routing."
             )
 
-        # Bot status / scheduler
+        # 2. TECHNICAL: Next.js
+        if re.search(r"\b(next|next\.js|nextjs)\b", msg):
+            return (
+                "### What is Next.js?\n\n"
+                "**Next.js** is a production-grade full-stack React framework created by Vercel that enables developers to build high-performance web applications with server-side rendering, static site generation, and modern routing.\n\n"
+                "#### Key Highlights:\n"
+                "- **React Server Components (RSC):** Render heavy UI components directly on the server, shipping zero client-side JavaScript.\n"
+                "- **App Router (`app/` directory):** Intuitive file-based routing with nested layouts, parallel routes, and loading states.\n"
+                "- **Rendering Strategies:** Supports Static Site Generation (SSG), Server-Side Rendering (SSR), and Incremental Static Regeneration (ISR).\n"
+                "- **Edge Middleware:** Intercept requests before they hit pages to handle authentication, redirects, and headers at the edge.\n"
+                "- **Built-in Optimizations:** Automatic image optimization (`next/image`), font loading (`next/font`), and script management."
+            )
+
+        # 3. TECHNICAL: Redux / State Management
+        if re.search(r"\b(redux|redux toolkit|state management)\b", msg):
+            return (
+                "### What is Redux?\n\n"
+                "**Redux** is a predictable state container for JavaScript applications. It centralizes your application's global state into a single immutable store.\n\n"
+                "#### Core Principles:\n"
+                "1. **Single Source of Truth:** Entire state tree is stored in a single object inside the store.\n"
+                "2. **State is Read-Only:** The only way to mutate state is to dispatch an **Action**.\n"
+                "3. **Changes are made with Pure Functions:** **Reducers** take the previous state and an action, returning a new updated state without side-effects.\n\n"
+                "**Modern Redux:** Always use **Redux Toolkit (`@reduxjs/toolkit`)**, which eliminates boilerplate using `createSlice` and `createAsyncThunk`."
+            )
+
+        # 4. TECHNICAL: TypeScript
+        if re.search(r"\b(typescript|ts)\b", msg):
+            return (
+                "### What is TypeScript?\n\n"
+                "**TypeScript** is a strongly-typed superset of JavaScript developed by Microsoft. It adds optional static typing, interfaces, and compile-time type safety to plain JavaScript.\n\n"
+                "#### Why Use TypeScript?\n"
+                "- **Catches Bugs Early:** Catches syntax and type errors during compilation before code reaches production.\n"
+                "- **Superior Developer Experience:** Provides intelligent IDE autocomplete, refactoring tools, and self-documenting code.\n"
+                "- **Enterprise Scalability:** Essential for large teams and large codebases to ensure interface contracts remain consistent."
+            )
+
+        # 5. TECHNICAL: Hooks (useState, useEffect, etc.)
+        if re.search(r"\b(hooks|usestate|useeffect|usememo|usecallback|usecontext)\b", msg):
+            return (
+                "### React Hooks Overview\n\n"
+                "React Hooks allow functional components to maintain internal state and access lifecycle features without writing class components.\n\n"
+                "- `useState`: Manages local component state.\n"
+                "- `useEffect`: Handles side-effects (API calls, subscriptions, DOM manipulation) after rendering.\n"
+                "- `useContext`: Subscribes to React Context without prop drilling.\n"
+                "- `useMemo`: Memoizes expensive calculated values to avoid recalculation on every render.\n"
+                "- `useCallback`: Memoizes callback function definitions to prevent unnecessary child re-renders."
+            )
+
+        # 6. TECHNICAL: Virtual DOM
+        if re.search(r"\b(virtual dom|vdom)\b", msg):
+            return (
+                "### What is the Virtual DOM?\n\n"
+                "The **Virtual DOM (VDOM)** is an in-memory lightweight abstraction of the real browser DOM kept by libraries like React.\n\n"
+                "#### How it Works:\n"
+                "1. When component state changes, React creates a new Virtual DOM tree.\n"
+                "2. It runs a **diffing algorithm** (Reconciliation) comparing the new Virtual DOM with the previous snapshot.\n"
+                "3. It computes the minimum set of real DOM operations and applies them in a single batch (Tree Mutation), avoiding costly browser reflows and repaints."
+            )
+
+        # 7. TECHNICAL: Interview Preparation
+        if any(w in msg for w in ("interview", "prepare", "questions", "tips", "hiring")):
+            return (
+                "### Top Frontend Developer Technical Interview Questions:\n\n"
+                "1. **Explain the difference between Client Components and Server Components in Next.js.**\n"
+                "2. **How does React's Virtual DOM diffing algorithm (Reconciliation) work?**\n"
+                "3. **What is the difference between `useMemo` and `useCallback`? When should you NOT use them?**\n"
+                "4. **Explain Event Bubbling, Event Capturing, and Event Delegation in JavaScript.**\n"
+                "5. **How do you optimize page load performance (Core Web Vitals - LCP, CLS, INP)?**\n\n"
+                "💡 *Tip:* Use the **STAR method** (Situation, Task, Action, Result) when answering behavioral questions, and always mention measurable metrics (e.g. 'reduced load time by 30%')."
+            )
+
+        # 8. APPLICATION: Today's jobs / how many jobs / apply counts
+        if any(w in msg for w in ("evlo", "evolo", "how many", "today", "innaki", "innaiku", "jobs", "apply", "applied", "sent", "shortlist", "count", "stat")):
+            return (
+                f"### Live Application Summary for {name}:\n\n"
+                f"- 🔍 **Jobs Discovered:** **{stats['jobs_found']}** total jobs discovered across Naukri & Indeed.\n"
+                f"- 🎯 **Shortlisted (AI Match ≥ 75%):** **{stats['shortlisted']}** jobs match your profile criteria.\n"
+                f"- 🚀 **Applications Sent:** **{stats['applications_sent_total']}** applications verified & submitted (Today: **{stats['applications_sent_today']}**).\n"
+                f"- ⏳ **Pending in Approval Queue:** **{stats['pending_approval']}** high-match positions ready for your review.\n"
+                f"- 🛡️ **Daily Limit:** {stats['daily_limit']} jobs per day.\n\n"
+                f"You can review and submit pending applications in the [Approval Queue](/approval-queue)."
+            )
+
+        # 9. APPLICATION: Bot status / scheduler
         if any(w in msg for w in ("bot", "schedule", "running", "status", "stop", "start", "run")):
             bot = context["bot_status"]
             status_text = "Active & Running" if bot["is_running"] else "Standby / Stopped"
             return (
-                f"🤖 **Bot Operating Status:**\n\n"
+                f"### Bot Operating Status:\n\n"
                 f"- **Current State:** {status_text}\n"
                 f"- **Schedule:** {bot['schedule']}\n"
                 f"- **Last Run:** {bot['last_run'] or 'Recent'}\n\n"
-                f"புதிய வேலைகளைத் தேட உடனடியாக [👉 Bot Controls](/bot-controls) பக்கத்தில் **'Run Bot Now'** கொடுக்கலாம்."
+                f"You can trigger an immediate automated job discovery run in [Bot Controls](/bot-controls)."
             )
 
-        # Approval Queue
+        # 10. APPLICATION: Approval Queue
         if any(w in msg for w in ("queue", "approval", "pending", "review")):
             top = context["approval_queue_top"]
             if top:
                 job_list = "\n".join([f"- **{j['title']}** at {j['company']} ({j['location']}) — *{j['match_score']}% Match*" for j in top])
                 return (
-                    f"📋 **Approval Queue-ல் உள்ள Top Jobs ({stats['pending_approval']} pending):**\n\n"
+                    f"### Jobs in Approval Queue ({stats['pending_approval']} pending):\n\n"
                     f"{job_list}\n\n"
-                    f"இவற்றை Review செய்து Apply செய்ய [👉 Approval Queue-க்கு செல்லுங்கள்](/approval-queue)."
+                    f"Visit the [Approval Queue](/approval-queue) to review tailored resumes and submit."
                 )
-            return f"தற்போது Approval Queue-ல் புதிய வேலைகள் எதுவும் நிலுவையில் இல்லை. புதிய வேலைகளைக் கண்டறிய [👉 Bot Controls](/bot-controls)-ல் Bot-ஐ Run செய்யுங்கள்."
+            return "There are currently no jobs pending in your Approval Queue. Run the bot to fetch new opportunities."
 
-        # Skills / Profile
+        # 11. APPLICATION: Profile & Skills
         if any(w in msg for w in ("skill", "profile", "resume", "experience")):
             skills = ", ".join(context["skills"]) or "React, Next.js, TypeScript"
             return (
-                f"👤 **Candidate Profile Details:**\n\n"
+                f"### Candidate Profile Overview:\n\n"
                 f"- **Name:** {name}\n"
-                f"- **Role:** {context['target_role']}\n"
+                f"- **Target Role:** {context['target_role']}\n"
                 f"- **Location:** {context['location']}\n"
-                f"- **Key Skills:** {skills}\n"
-                f"- **Experience:** {context['experience_years']} Years\n\n"
-                f"Profile-ஐ மாற்ற [👉 Resume & Profile](/profile) பக்கத்திற்கு செல்லலாம்."
+                f"- **Verified Skills:** {skills}\n"
+                f"- **Total Experience:** {context['experience_years']} Years\n\n"
+                f"You can update or re-verify your profile in [Resume & Profile](/profile)."
             )
 
-        # General question fallback
+        # 12. General fallback in clean English
         return (
-            f"வணக்கம் {name}! நான் உங்களது **AI Career Copilot**.\n\n"
-            f"நமது Application-ல் உள்ள Jobs, Applications, Approval Queue, மற்றும் Bot Controls பற்றி எதை வேண்டுமானாலும் என்னிடம் கேட்கலாம்.\n\n"
-            f"💡 *குறிப்பு: உலகளாவிய Coding, Interview preparation மற்றும் பொதுவான கேள்விகளுக்கு முழுமையான Gemini 2.0 AI அறிவைப் பெற, `.env`-ல் `GEMINI_API_KEY` சேர்த்துக் கொள்ளலாம்.*"
+            f"Hello {name}! I am your **AI Career Copilot**.\n\n"
+            f"I have live access to your dashboard: **{stats['jobs_found']} jobs found**, **{stats['applications_sent_total']} applications sent**, and **{stats['pending_approval']} jobs pending review**.\n\n"
+            f"You can ask me anything about your job pipeline, or ask any technical coding questions (e.g., *'What is React?'*, *'How does Next.js App Router work?'*, *'Interview questions for Frontend Developer'*).\n\n"
+            f"💡 *Tip: For unbounded generative AI reasoning, you can add your free `GEMINI_API_KEY` in `.env` or in the Chat header!*"
         )
 
 
