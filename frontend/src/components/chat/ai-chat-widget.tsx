@@ -51,6 +51,113 @@ export function AiChatWidget() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+
+  // Isolate scroll strictly to the chatbot: prevent outside background page from scrolling
+  useEffect(() => {
+    const modalEl = modalRef.current;
+    if (!isOpen || !modalEl) return;
+
+    let touchStartY = 0;
+
+    const handleWheel = (e: WheelEvent) => {
+      const scrollable = messagesContainerRef.current;
+      if (!scrollable) {
+        e.preventDefault();
+        return;
+      }
+
+      const isOverScrollable = scrollable.contains(e.target as Node) || e.target === scrollable;
+      if (!isOverScrollable) {
+        // Scrolled over header, footer, drawer -> lock outside scroll
+        e.preventDefault();
+        return;
+      }
+
+      const { scrollTop, scrollHeight, clientHeight } = scrollable;
+      const maxScroll = scrollHeight - clientHeight;
+      const deltaY = e.deltaY;
+
+      if (maxScroll <= 0) {
+        e.preventDefault();
+        return;
+      }
+
+      // If at top and scrolling up, prevent background page scroll
+      if (scrollTop <= 0 && deltaY < 0) {
+        e.preventDefault();
+        return;
+      }
+
+      // If at bottom and scrolling down, prevent background page scroll
+      if (scrollTop >= maxScroll - 1 && deltaY > 0) {
+        e.preventDefault();
+        return;
+      }
+
+      e.stopPropagation();
+    };
+
+    const handleTouchStart = (e: TouchEvent) => {
+      touchStartY = e.touches[0].clientY;
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      const scrollable = messagesContainerRef.current;
+      if (!scrollable) {
+        e.preventDefault();
+        return;
+      }
+
+      const isOverScrollable = scrollable.contains(e.target as Node) || e.target === scrollable;
+      if (!isOverScrollable) {
+        e.preventDefault();
+        return;
+      }
+
+      const touchCurrentY = e.touches[0].clientY;
+      const deltaY = touchStartY - touchCurrentY;
+      const { scrollTop, scrollHeight, clientHeight } = scrollable;
+      const maxScroll = scrollHeight - clientHeight;
+
+      if (maxScroll <= 0) {
+        e.preventDefault();
+        return;
+      }
+
+      if (scrollTop <= 0 && deltaY < 0) {
+        e.preventDefault();
+        return;
+      }
+
+      if (scrollTop >= maxScroll - 1 && deltaY > 0) {
+        e.preventDefault();
+        return;
+      }
+    };
+
+    modalEl.addEventListener('wheel', handleWheel, { passive: false });
+    modalEl.addEventListener('touchstart', handleTouchStart, { passive: true });
+    modalEl.addEventListener('touchmove', handleTouchMove, { passive: false });
+
+    return () => {
+      modalEl.removeEventListener('wheel', handleWheel);
+      modalEl.removeEventListener('touchstart', handleTouchStart);
+      modalEl.removeEventListener('touchmove', handleTouchMove);
+    };
+  }, [isOpen]);
+
+  // Lock body scroll when full screen
+  useEffect(() => {
+    if (isOpen && sizeMode === 'full') {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [isOpen, sizeMode]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -256,7 +363,8 @@ export function AiChatWidget() {
       {/* Expandable Half-Screen / Full-Screen Chat Modal */}
       {isOpen && (
         <div
-          className={`fixed z-50 bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-6 duration-200 ${getSizeClasses()}`}
+          ref={modalRef}
+          className={`fixed z-50 bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden overscroll-contain animate-in fade-in slide-in-from-bottom-6 duration-200 ${getSizeClasses()}`}
         >
           {/* Header */}
           <div className="px-4 py-3.5 bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white flex items-center justify-between shadow-sm shrink-0">
@@ -370,7 +478,10 @@ export function AiChatWidget() {
           )}
 
           {/* Messages Area */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/60">
+          <div
+            ref={messagesContainerRef}
+            className="flex-1 overflow-y-auto overscroll-contain p-4 space-y-4 bg-slate-50/60"
+          >
             {messages.map((m) => {
               const isBot = m.role === 'model';
               return (
