@@ -36,8 +36,14 @@ class AIChatService:
     """Universal AI Chat service backed by Gemini API with live DB state."""
 
     def __init__(self):
-        self.gemini_model = "gemini-2.0-flash"
-        self.fallback_model = "gemini-1.5-flash"
+        self.candidate_models = [
+            "gemini-flash-lite-latest",
+            "gemini-2.5-flash-lite",
+            "gemini-flash-latest",
+            "gemini-2.5-flash",
+            "gemini-2.0-flash",
+            "gemini-1.5-flash",
+        ]
 
     def _get_api_key(self) -> str:
         """Resolve Gemini API key from settings or OS environment."""
@@ -196,13 +202,13 @@ class AIChatService:
         system_prompt = self._build_system_prompt(context)
         api_key = (gemini_api_key or "").strip() or self._get_api_key()
 
-        # If Gemini API Key is present, call Google Gemini 2.0 Flash
+        # If Gemini API Key is present, call Google Gemini API with fallback
         if api_key:
             try:
-                reply = await self._call_gemini(message, history, system_prompt, api_key)
+                reply, model_used = await self._call_gemini(message, history, system_prompt, api_key)
                 return {
                     "reply": reply,
-                    "model": self.gemini_model,
+                    "model": model_used,
                     "live_stats": context["today_stats"],
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 }
@@ -224,10 +230,8 @@ class AIChatService:
         history: list[dict[str, str]],
         system_prompt: str,
         api_key: str,
-    ) -> str:
-        """Call Gemini REST generateContent endpoint using httpx."""
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.gemini_model}:generateContent?key={api_key}"
-
+    ) -> tuple[str, str]:
+        """Call Gemini REST generateContent endpoint using httpx with automatic model fallback."""
         contents: list[dict[str, Any]] = []
         for h in history[-8:]:
             role = "model" if h.get("role") in ("model", "assistant") else "user"
@@ -247,19 +251,27 @@ class AIChatService:
         }
 
         async with httpx.AsyncClient(timeout=30.0) as client:
-            res = await client.post(url, json=payload)
-            if res.status_code == 200:
-                data = res.json()
-                candidates = data.get("candidates", [])
-                if candidates:
-                    parts = candidates[0].get("content", {}).get("parts", [])
-                    if parts and "text" in parts[0]:
-                        return parts[0]["text"]
-            else:
-                logger.error("Gemini API error %s: %s", res.status_code, res.text)
-                raise RuntimeError(f"Gemini error {res.status_code}")
+            for model_name in self.candidate_models:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+                try:
+                    res = await client.post(url, json=payload)
+                    if res.status_code == 200:
+                        data = res.json()
+                        candidates = data.get("candidates", [])
+                        if candidates:
+                            parts = candidates[0].get("content", {}).get("parts", [])
+                            if parts and "text" in parts[0]:
+                                return parts[0]["text"], model_name
+                    elif res.status_code == 404:
+                        # Model not available for this key/tier, fallback to next
+                        continue
+                    else:
+                        logger.warning("Gemini model %s returned status %s: %s", model_name, res.status_code, res.text[:120])
+                except Exception as e:
+                    logger.warning("Gemini model %s request exception: %s", model_name, e)
+                    continue
 
-        return "I could not generate a response at this time. Please try again."
+        raise RuntimeError("No Gemini model responded successfully")
 
     def _generate_heuristic_response(self, message: str, context: dict[str, Any]) -> str:
         """Intelligent English knowledge engine for technical questions and live application data."""
