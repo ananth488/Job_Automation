@@ -429,32 +429,35 @@ export function AiChatWidget() {
           </div>
 
           {/* Input Footer */}
-          <div className="p-3 bg-white border-t border-slate-200 shrink-0">
+          <div className="p-3 sm:p-4 bg-white border-t border-slate-200 shrink-0">
             <form
               onSubmit={(e) => {
                 e.preventDefault();
                 handleSend();
               }}
-              className="flex items-center gap-2"
+              className="relative flex items-center bg-slate-100 hover:bg-slate-50 focus-within:bg-white border border-slate-200 focus-within:border-slate-400 focus-within:ring-2 focus-within:ring-slate-400/20 rounded-full transition-all px-4 py-1 shadow-inner"
             >
               <input
                 ref={inputRef}
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask in English: 'what is React?', 'how many jobs today?', 'interview prep'..."
+                placeholder="Message ChatGPT..."
                 disabled={loading}
-                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:text-slate-400"
+                className="flex-1 bg-transparent py-2 text-[13.5px] text-slate-800 focus:outline-hidden placeholder:text-slate-400"
               />
               <button
                 type="submit"
                 disabled={!input.trim() || loading}
                 title="Send message"
-                className="p-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 text-white rounded-xl transition-colors shadow-sm shrink-0"
+                className="p-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 disabled:opacity-50 text-white rounded-full transition-all shadow-sm shrink-0 ml-1.5"
               >
-                <Send className="w-4 h-4" />
+                <Send className="w-3.5 h-3.5" />
               </button>
             </form>
+            <p className="text-[10.5px] text-center text-slate-400 mt-2">
+              AI Copilot can make mistakes. Verify important application details.
+            </p>
           </div>
         </div>
       )}
