@@ -4,6 +4,7 @@ import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
+import { AiChatWidget } from '@/components/chat/ai-chat-widget';
 import { setAuthCookie, clearAuthCookie } from '@/lib/auth-cookie';
 
 export interface DashboardLayoutProps {
@@ -41,6 +42,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, titl
           {children}
         </main>
       </div>
+
+      {/* Floating Universal AI Career Copilot */}
+      <AiChatWidget />
     </div>
   );
 };

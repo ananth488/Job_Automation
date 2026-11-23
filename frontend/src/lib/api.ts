@@ -301,4 +301,33 @@ export const settingsApi = {
   },
 };
 
+// ============================================================
+// AI Copilot & Chat
+// ============================================================
+export interface ChatMessagePayload {
+  role: 'user' | 'model';
+  content: string;
+}
+
+export interface ChatResponseData {
+  reply: string;
+  model: string;
+  live_stats?: Record<string, any>;
+  timestamp: string;
+}
+
+export const chatApi = {
+  sendMessage: async (
+    message: string,
+    history: ChatMessagePayload[] = []
+  ): Promise<ChatResponseData> => {
+    const { data } = await api.post('/chat', { message, history });
+    return data;
+  },
+  getSuggestions: async (): Promise<string[]> => {
+    const { data } = await api.get('/chat/suggestions');
+    return data.suggestions || [];
+  },
+};
+
 export default api;

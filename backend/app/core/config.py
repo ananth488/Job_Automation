@@ -44,6 +44,7 @@ class Settings(BaseSettings):
 
     # AI / LLM
     ANTHROPIC_API_KEY: str = ""
+    GEMINI_API_KEY: str = ""
 
     # File uploads
     UPLOAD_DIR: str = str(Path(__file__).resolve().parent.parent.parent / "uploads")
