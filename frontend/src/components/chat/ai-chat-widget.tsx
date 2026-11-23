@@ -442,7 +442,7 @@ export function AiChatWidget() {
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Message ChatGPT..."
+                placeholder="Ask anything..."
                 disabled={loading}
                 className="flex-1 bg-transparent py-2 text-[13.5px] text-slate-800 focus:outline-hidden placeholder:text-slate-400"
               />
